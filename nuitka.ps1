@@ -1,4 +1,4 @@
-$python = "C:\Users\admin\Documents\codespace\AICheck\.venv\Scripts\python.exe"
+$python = ".venv\Scripts\python.exe"
 
 & $python -m nuitka `
 	--onefile `
