@@ -1,0 +1,13 @@
+{
+    "xlsx": {
+        "input_path": "path/to/xlsx",
+        "input_sheet_name": "Sheet1"
+    },
+    "csv": {
+        "output_path": "output/"
+    },
+    "end_flag": {
+        "tag": "str",
+        "value": object
+    }
+}

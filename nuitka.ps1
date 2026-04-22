@@ -1,0 +1,8 @@
+$python = "C:\Users\admin\Documents\codespace\AICheck\.venv\Scripts\python.exe"
+
+& $python -m nuitka `
+	--onefile `
+	--windows-console-mode=force `
+	--output-dir=output/nuitka `
+    --jobs=12 `
+	src/main.py
