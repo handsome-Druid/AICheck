@@ -1,4 +1,4 @@
-$python = ".venv\Scripts\python.exe"
+$python = ".\.venv\Scripts\python.exe"
 
 & $python -m nuitka `
 	--onefile `
