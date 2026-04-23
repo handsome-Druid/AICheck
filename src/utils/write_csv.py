@@ -16,28 +16,27 @@ except ImportError:
 
 
 
-def write_csv(results: Iterator[Iterable[str | float]], _path: str | Path) -> None:
+def write_csv(results: Iterator[Iterable[str | float]], _path: str | Path) -> int:
     _path = get_path(_path)
     os.makedirs(
         Path(_path).resolve().parent, 
         exist_ok=True
     )
     with open(_path, mode='w', newline='', encoding='utf-8-sig') as csvfile:
-        _len = len
         _writerows = csv.writer(csvfile).writerows
-        _write = sys.stdout.write
         _list = list
         _islice = islice
+        total_rows = 0
         while True:
             chunk = _list(_islice(results, 5000))
             if not chunk:
                 break
             _writerows(chunk)
-            _write(f"Wrote {_len(chunk)} rows to {_path}\n")
-        _write(f"Finished writing to {_path}\n")
+            total_rows += len(chunk)
+    return total_rows
 
 
-def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) -> None:
+def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) -> int:
     _path = get_path(_path)
     os.makedirs(
         Path(_path).resolve().parent, 
@@ -64,10 +63,10 @@ def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) 
     _map = map
 
     with open(_path, mode='w', newline='', encoding='utf-8-sig') as csvfile:
-        _len = len
         _writer = csv.writer(csvfile)
         _writerow = _writer.writerow
         _writerows = _writer.writerows
+        total_rows = 0
 
         _writerow(header)
         _writerow(getter(first_class))
@@ -75,6 +74,7 @@ def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) 
         while True:
             if chunk := _list(_islice(results, 5000)):
                 _writerows(_map(getter, chunk))
+                total_rows += len(chunk)
             else:
                 break
-        sys.stdout.write(f"Finished writing to {_path}\n")
+    return total_rows

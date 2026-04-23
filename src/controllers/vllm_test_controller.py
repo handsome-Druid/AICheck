@@ -5,7 +5,6 @@ from collections.abc import AsyncIterator, Iterator
 from itertools import islice
 from pathlib import Path
 from queue import Queue
-from threading import Thread
 from typing import cast
 
 import httpx
@@ -68,19 +67,8 @@ async def run() -> None:
     print_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
     csv_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
 
-    print_thread = Thread(
-        target=test_print_from_dataclass,
-        args=(iter_queue_results(print_queue),),
-        daemon=True,
-    )
-    csv_thread = Thread(
-        target=write_csv_from_dataclass,
-        args=(iter_queue_results(csv_queue), csv_path),
-        daemon=True,
-    )
-
-    print_thread.start()
-    csv_thread.start()
+    print_task = asyncio.create_task(asyncio.to_thread(test_print_from_dataclass, iter_queue_results(print_queue)))
+    csv_task = asyncio.create_task(asyncio.to_thread(write_csv_from_dataclass, iter_queue_results(csv_queue), csv_path))
 
     async for result in results():
         await asyncio.gather(
@@ -93,7 +81,6 @@ async def run() -> None:
         asyncio.to_thread(csv_queue.put, RESULT_SENTINEL),
     )
 
-    await asyncio.gather(
-        asyncio.to_thread(print_thread.join),
-        asyncio.to_thread(csv_thread.join),
-    )
+    rows_written = await csv_task
+    await print_task
+    print(f"Wrote {rows_written} rows to {csv_path}")
