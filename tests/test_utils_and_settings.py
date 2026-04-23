@@ -190,3 +190,20 @@ class TestPrintHelpers(unittest.TestCase):
         self.assertIn("name", output)
         self.assertIn("3.1416", output)
         self.assertIn("['x', 'y']", output)
+
+    def test_test_print_from_dataclass_handles_single_field_dataclass(self) -> None:
+        stdout = io.StringIO()
+
+        @dataclass
+        class SingleRow:
+            value: str
+
+        rows = iter([SingleRow(value="alpha"), SingleRow(value="beta")])
+
+        with patch("sys.stdout", stdout):
+            test_print_module.test_print_from_dataclass(rows)
+
+        output = stdout.getvalue()
+        self.assertIn("value", output)
+        self.assertIn("alpha", output)
+        self.assertIn("beta", output)

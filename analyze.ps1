@@ -53,7 +53,7 @@ $python = ".\.venv\Scripts\python.exe"
     & $python -m coverage report -m --fail-under=95
 
     Write-SectionTitle "sourcery review ./"
-    & $python -m sourcery review ./
+    & .venv\Scripts\sourcery.exe review ./ 2>&1
 
     Write-SectionTitle "pyinstrument src/main.py --nopause"
     & $python -m pyinstrument src/main.py --nopause

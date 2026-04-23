@@ -5,7 +5,7 @@ import importlib
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Iterator, NoReturn
+from typing import Iterator, NoReturn, cast
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -73,6 +73,96 @@ class TestSheetAndAdapter(unittest.TestCase):
         self.assertEqual(results[1].model_name, "")
         self.assertEqual(results[1].gpu_count, 0)
         self.assertEqual(results[1].context_length, 0)
+
+    def test_sheet_from_reader_uses_default_reader(self) -> None:
+        header: CellGetValue = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row: CellGetValue = [30002, "model-d", "name-d", "monitor-d", "L40", 8, 32, "container-d", "https://d/chat/completions"]
+
+        with patch("src.models.sheet.read_xlsx", return_value=iter([header, row])):
+            results = list(sheet_module.Sheet.from_reader())
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].model_id, "model-d")
+
+    def test_sheet_from_reader_supports_bool_and_passthrough_types(self) -> None:
+        header: CellGetValue = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row = cast(
+            CellGetValue,
+            [30003, "model-e", "name-e", "monitor-e", "RTX6000", "yes", ("raw", "value"), "container-e", "https://e/chat/completions"],
+        )
+
+        fake_field_specs = [
+            SimpleNamespace(name="port", metadata={"tag": "port", "type": int}),
+            SimpleNamespace(name="model_id", metadata={"tag": "modelID", "type": str}),
+            SimpleNamespace(name="model_name", metadata={"tag": "模型名", "type": str}),
+            SimpleNamespace(name="monitor_id", metadata={"tag": "监控id", "type": str}),
+            SimpleNamespace(name="gpu_model", metadata={"tag": "GPU型号", "type": str}),
+            SimpleNamespace(name="gpu_count", metadata={"tag": "GPU数量", "type": bool}),
+            SimpleNamespace(name="context_length", metadata={"tag": "上下文长度（K）", "type": object}),
+            SimpleNamespace(name="container_name", metadata={"tag": "容器名", "type": str}),
+            SimpleNamespace(name="call_method", metadata={"tag": "调用方法", "type": str}),
+        ]
+
+        def fake_fields(cls: type[object]) -> list[SimpleNamespace]:
+            return fake_field_specs if cls is sheet_module.Sheet else []
+
+        with patch.object(sheet_module, "fields", side_effect=fake_fields):
+            results = list(sheet_module.Sheet.from_reader(iter([header, row])))
+
+        self.assertTrue(results[0].gpu_count)
+        self.assertEqual(results[0].context_length, ("raw", "value"))
+
+    def test_sheet_from_reader_covers_float_and_untagged_fields(self) -> None:
+        header: CellGetValue = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row: CellGetValue = [30004, "model-f", "name-f", "monitor-f", "A800", 6, 12.5, "container-f", "https://f/chat/completions"]
+
+        fake_field_specs = [
+            SimpleNamespace(name="port", metadata={"tag": "port", "type": int}),
+            SimpleNamespace(name="model_id", metadata={"tag": "modelID", "type": str}),
+            SimpleNamespace(name="model_name", metadata={"tag": "模型名", "type": str}),
+            SimpleNamespace(name="monitor_id", metadata={"tag": "监控id", "type": str}),
+            SimpleNamespace(name="gpu_model", metadata={"tag": "GPU型号", "type": str}),
+            SimpleNamespace(name="gpu_count", metadata={"tag": "GPU数量", "type": int}),
+            SimpleNamespace(name="context_length", metadata={"tag": "上下文长度（K）", "type": float}),
+            SimpleNamespace(name="container_name", metadata={"tag": "容器名", "type": str}),
+            SimpleNamespace(name="call_method", metadata={"tag": "调用方法", "type": str}),
+            SimpleNamespace(name="ignored", metadata={}),
+        ]
+
+        with patch.object(sheet_module, "fields", return_value=fake_field_specs):
+            results = list(sheet_module.Sheet.from_reader(iter([header, row])))
+
+        self.assertEqual(results[0].context_length, 12.5)
 
     def test_get_sheet_iterator_caches_iterator(self) -> None:
         header = [
@@ -184,9 +274,20 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(non_200.status, "failed")
         self.assertIn("状态码: 500", non_200.message)
 
+        missing_data, _ = await self._run_case(FakeClientCase(["m1"], {}))
+        self.assertEqual(missing_data.status, "failed")
+        self.assertIn("缺少'data'字段", missing_data.message)
+
         malformed, _ = await self._run_case(FakeClientCase(["m1"], object()), json_side_effect=ValueError("bad json"))
         self.assertEqual(malformed.status, "failed")
         self.assertIn("无法解析API返回的JSON数据", malformed.message)
+
+    async def test_check_vllm_models_handles_empty_expected_and_extra_models(self) -> None:
+        result, _ = await self._run_case(FakeClientCase([], {"data": [{"id": "m1"}, {"id": "m2"}]}))
+
+        self.assertEqual(result.status, "failed")
+        self.assertEqual(result.extra_model, ["m1", "m2"])
+        self.assertEqual(result.missing_model, [])
 
     async def test_check_vllm_models_handles_timeout_request_and_unknown_errors(self) -> None:
         timeout_client = AsyncMock()
