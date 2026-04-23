@@ -91,21 +91,24 @@ class TestSettings(unittest.TestCase):
             )
 
             with patch("src.config.settings.get_path", return_value=config_path):
-                first = settings_module.get_config("custom.json", refresh=True)
-                self.assertEqual(first.xlsx_input_path, "input-a.xlsx")
+                self._extracted_from_test_get_config_caches_and_refreshes_10(config_path)
 
-                self._write_config_file(
-                    config_path,
-                    self._make_config_payload("input-b.xlsx", "Sheet2", "output-b/", 40000),
-                )
+    def _extracted_from_test_get_config_caches_and_refreshes_10(self, config_path: Path) -> None:
+        first = settings_module.get_config("custom.json", refresh=True)
+        self.assertEqual(first.xlsx_input_path, "input-a.xlsx")
 
-                cached = settings_module.get_config("custom.json")
-                self.assertIs(first, cached)
-                self.assertEqual(cached.xlsx_input_path, "input-a.xlsx")
+        self._write_config_file(
+            config_path,
+            self._make_config_payload("input-b.xlsx", "Sheet2", "output-b/", 40000),
+        )
 
-                refreshed = settings_module.get_config("custom.json", refresh=True)
-                self.assertEqual(refreshed.xlsx_input_path, "input-b.xlsx")
-                self.assertEqual(refreshed.end_value, 40000)
+        cached = settings_module.get_config("custom.json")
+        self.assertIs(first, cached)
+        self.assertEqual(cached.xlsx_input_path, "input-a.xlsx")
+
+        refreshed = settings_module.get_config("custom.json", refresh=True)
+        self.assertEqual(refreshed.xlsx_input_path, "input-b.xlsx")
+        self.assertEqual(refreshed.end_value, 40000)
 
 
 class TestWriteCsv(unittest.TestCase):

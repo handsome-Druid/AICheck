@@ -31,7 +31,7 @@ $python = ".\.venv\Scripts\python.exe"
         param(
             [string]$Title
         )
-        Start-Sleep -Seconds 1
+
         Write-Output ""
         Write-Output "===== $Title ====="
         Write-Output ""
@@ -48,12 +48,12 @@ $python = ".\.venv\Scripts\python.exe"
     Write-SectionTitle "pyright ./"
     & $python -m pyright ./
 
+    Write-SectionTitle "sourcery review ./"
+    & .venv\Scripts\sourcery.exe review ./ 2>&1
+
     Write-SectionTitle "coverage"
     & $python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
     & $python -m coverage report -m --fail-under=95
-
-    Write-SectionTitle "sourcery review ./"
-    & .venv\Scripts\sourcery.exe review ./ 2>&1
 
     Write-SectionTitle "pyinstrument src/main.py --nopause"
     & $python -m pyinstrument src/main.py --nopause
