@@ -70,6 +70,7 @@ def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) 
 
         _writerow(header)
         _writerow(getter(first_class))
+        total_rows += 1
 
         while True:
             if chunk := _list(_islice(results, 5000)):

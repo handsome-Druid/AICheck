@@ -132,14 +132,13 @@ class TestWriteCsv(unittest.TestCase):
             stdout = io.StringIO()
 
             with patch("src.utils.write_csv.get_path", return_value=output_path), patch("sys.stdout", stdout):
-                write_csv_module.write_csv(rows, "ignored.csv")
+                written = write_csv_module.write_csv(rows, "ignored.csv")
 
             with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 self.assertEqual(list(csv.reader(handle)), [["alpha", "1.5"], ["beta", "2.25"]])
 
-            output = stdout.getvalue()
-            self.assertIn("Wrote 2 rows", output)
-            self.assertIn("Finished writing", output)
+            self.assertEqual(written, 2)
+            self.assertEqual(stdout.getvalue(), "")
 
     def test_write_csv_from_dataclass_uses_slots_header(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -148,12 +147,13 @@ class TestWriteCsv(unittest.TestCase):
             stdout = io.StringIO()
 
             with patch("src.utils.write_csv.get_path", return_value=output_path), patch("sys.stdout", stdout):
-                write_csv_module.write_csv_from_dataclass(rows, "ignored.csv")
+                written = write_csv_module.write_csv_from_dataclass(rows, "ignored.csv")
 
             with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 self.assertEqual(list(csv.reader(handle)), [["name", "count"], ["one", "1"], ["two", "2"]])
 
-            self.assertIn("Finished writing", stdout.getvalue())
+            self.assertEqual(written, 2)
+            self.assertEqual(stdout.getvalue(), "")
 
     def test_write_csv_from_dataclass_falls_back_to_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -15,21 +15,6 @@ from src.models.sheet import Sheet
 from src.models.vllm_results import VLLMTestResult
 
 
-class DummyThread:
-    def __init__(self, target: Callable[..., object], args: tuple[object, ...], daemon: bool) -> None:
-        self.target = target
-        self.args = args
-        self.daemon = daemon
-        self.started = False
-        self.joined = False
-
-    def start(self) -> None:
-        self.started = True
-
-    def join(self) -> None:
-        self.joined = True
-
-
 class DummyClient:
     async def __aenter__(self) -> DummyClient:
         return self
@@ -68,49 +53,34 @@ class TestControllerHelpers(unittest.TestCase):
 
 
 class TestControllerRun(unittest.IsolatedAsyncioTestCase):
-    async def test_run_processes_results_and_waits_for_threads(self) -> None:
+    async def test_run_processes_results_and_prints_summary(self) -> None:
         result = VLLMTestResult("127.0.0.1", 8000, "success", "ok", ["m1"], ["m1"], [], [], 0.1)
         sheet_one = SimpleNamespace(end="GO", call_method="https://example.com/chat/completions", port=8000, model_id="m1")
         sheet_two = SimpleNamespace(end="STOP", call_method="https://example.com/chat/completions", port=8001, model_id="m2")
         config = SimpleNamespace(end_tag="end", end_value="STOP", csv_output_path=tempfile.gettempdir(), xlsx_input_path="ignored.xlsx")
-        created_threads: list[DummyThread] = []
 
-        def fake_to_thread(func: Callable[..., object], *args: object, **kwargs: object) -> object:
+        async def fake_to_thread(func: Callable[..., object], *args: object, **kwargs: object) -> object:
             return func(*args, **kwargs)
 
         check_mock = AsyncMock(return_value=result)
         print_mock = Mock()
         csv_mock = Mock()
 
-        def fake_thread_factory(
-            *,
-            target: Callable[..., object],
-            args: tuple[object, ...],
-            daemon: bool,
-        ) -> DummyThread:
-            thread = DummyThread(target, args, daemon)
-            created_threads.append(thread)
-            return thread
-
         with patch("src.controllers.vllm_test_controller.get_config", return_value=config), patch(
             "src.controllers.vllm_test_controller.get_sheet_iterator", return_value=iter([sheet_one, sheet_two])
         ), patch("src.controllers.vllm_test_controller.check_vllm_models", check_mock), patch(
             "src.controllers.vllm_test_controller.httpx.AsyncClient", return_value=DummyClient()
-        ), patch("src.controllers.vllm_test_controller.Thread", side_effect=fake_thread_factory), patch(
-            "src.controllers.vllm_test_controller.test_print_from_dataclass", print_mock
-        ), patch("src.controllers.vllm_test_controller.write_csv_from_dataclass", csv_mock), patch(
-            "src.controllers.vllm_test_controller.asyncio.to_thread", side_effect=fake_to_thread
-        ):
+        ), patch("src.controllers.vllm_test_controller.test_print_from_dataclass", print_mock), patch(
+            "src.controllers.vllm_test_controller.write_csv_from_dataclass", csv_mock
+        ), patch("src.controllers.vllm_test_controller.asyncio.to_thread", side_effect=fake_to_thread), patch(
+            "builtins.print"
+        ) as print_spy:
             await controller_module.run()
 
-        self.assertEqual(len(created_threads), 2)
-        self.assertIs(created_threads[0].target, print_mock)
-        self.assertIs(created_threads[1].target, csv_mock)
-        self.assertTrue(created_threads[0].started)
-        self.assertTrue(created_threads[1].started)
-        self.assertTrue(created_threads[0].joined)
-        self.assertTrue(created_threads[1].joined)
         check_mock.assert_awaited_once()
+        print_mock.assert_called_once()
+        csv_mock.assert_called_once()
+        print_spy.assert_called_once()
 
 
 class TestMainModule(unittest.TestCase):
