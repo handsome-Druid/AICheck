@@ -59,7 +59,7 @@ class TestControllerRun(unittest.IsolatedAsyncioTestCase):
         sheet_two = SimpleNamespace(end="STOP", call_method="https://example.com/chat/completions", port=8001, model_id="m2")
         config = SimpleNamespace(end_tag="end", end_value="STOP", csv_output_path=tempfile.gettempdir(), xlsx_input_path="ignored.xlsx")
 
-        async def fake_to_thread(func: Callable[..., object], *args: object, **kwargs: object) -> object:
+        def fake_to_thread(func: Callable[..., object], *args: object, **kwargs: object) -> object:
             return func(*args, **kwargs)
 
         check_mock = AsyncMock(return_value=result)
