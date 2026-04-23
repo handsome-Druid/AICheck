@@ -1,5 +1,7 @@
 function Invoke-ProjectAnalysis {
-$python = ".\.venv\Scripts\python.exe"
+    function python {
+        & ".\.venv\Scripts\python.exe" @args
+    }
 
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
     [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -43,20 +45,20 @@ $python = ".\.venv\Scripts\python.exe"
     tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"
 
     Write-SectionTitle "mypy --strict ./"
-    & $python -m mypy --strict ./
+    & python -m mypy --strict ./
 
     Write-SectionTitle "pyright ./"
-    & $python -m pyright ./
+    & python -m pyright --pythonpath .\.venv\Scripts\python.exe ./
 
     Write-SectionTitle "sourcery review ./"
     & .venv\Scripts\sourcery.exe review ./ 2>&1
 
     Write-SectionTitle "coverage"
-    & $python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
-    & $python -m coverage report -m --fail-under=95
+    & python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
+    & python -m coverage report -m --fail-under=95
 
     Write-SectionTitle "pyinstrument src/main.py --nopause"
-    & $python -m pyinstrument src/main.py --nopause
+    & python -m pyinstrument src/main.py --nopause
 
     if ($env:SONAR_TOKEN) {
         $projectKey = "handsome-Druid_AICheck"

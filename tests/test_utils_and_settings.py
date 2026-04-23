@@ -110,6 +110,16 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(refreshed.xlsx_input_path, "input-b.xlsx")
         self.assertEqual(refreshed.end_value, 40000)
 
+    def test_get_config_raises_when_file_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            missing_path = Path(temp_dir) / "missing-settings.json"
+
+            with patch("src.config.settings.get_path", return_value=missing_path):
+                with self.assertRaises(FileNotFoundError) as context:
+                    settings_module.get_config("missing-settings.json", refresh=True)
+
+        self.assertIn("missing-settings.json", str(context.exception))
+
 
 class TestWriteCsv(unittest.TestCase):
     def setUp(self) -> None:

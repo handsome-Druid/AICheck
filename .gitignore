@@ -14,3 +14,4 @@ output/
 analyze.txt
 
 .coverage
+nuitka-crash-report.xml

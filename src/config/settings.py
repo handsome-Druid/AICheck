@@ -58,10 +58,13 @@ json_config: dict[str, JsonConfig] = {}
 def get_config(_json: str = "settings.json", refresh: bool = False) -> JsonConfig:
     global json_config
     if _json not in json_config or refresh:
-        json_config[_json] = JsonConfig.from_json(
-            get_path(_json)
-            .read_text(encoding="utf-8")
-        )
+        try:
+            json_config[_json] = JsonConfig.from_json(
+                get_path(_json)
+                .read_text(encoding="utf-8")
+            )
+        except FileNotFoundError as e:
+            raise FileNotFoundError(f"Configuration file '{_json}' not found.") from e
     return json_config[_json]
 
 def main() -> None:

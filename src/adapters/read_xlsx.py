@@ -15,7 +15,10 @@ except ImportError:
 
 def read_xlsx(path: str | PathLike[str] = get_config().xlsx_input_path) -> Iterator[CellGetValue]:
 	sheet_name = get_config().xlsx_input_sheet_name
-	sheet = CalamineWorkbook.from_path(str(path)).get_sheet_by_name(sheet_name)
+	try:
+		sheet = CalamineWorkbook.from_path(str(path)).get_sheet_by_name(sheet_name)
+	except FileNotFoundError as e:
+		raise FileNotFoundError(f"Excel file '{path}' not found.") from e
 	
 	if sheet is None:
 		raise ValueError(

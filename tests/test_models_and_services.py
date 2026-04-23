@@ -208,6 +208,15 @@ class TestSheetAndAdapter(unittest.TestCase):
 
         self.assertIn("Missing", str(context.exception))
 
+    def test_read_xlsx_raises_when_file_missing(self) -> None:
+        with patch("src.adapters.read_xlsx.get_config", return_value=SimpleNamespace(xlsx_input_sheet_name="Sheet1")), patch(
+            "src.adapters.read_xlsx.CalamineWorkbook.from_path", side_effect=FileNotFoundError
+        ):
+            with self.assertRaises(FileNotFoundError) as context:
+                list(read_xlsx_module.read_xlsx(Path("missing.xlsx")))
+
+        self.assertIn("missing.xlsx", str(context.exception))
+
 
 class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
     async def _run_case(
