@@ -10,3 +10,5 @@ output/
 .ruff_cache/
 
 /settings.json
+
+analyze.txt
