@@ -24,31 +24,44 @@ $python = ".\.venv\Scripts\python.exe"
             [string]$Uri
         )
 
-        Write-Output "`n$Title"
         Invoke-RestMethod -Uri $Uri -Headers (Get-SonarCloudHeaders) | ConvertTo-Json -Depth 10
+    }
+
+    function Write-SectionTitle {
+        param(
+            [string]$Title
+        )
+
+        $escape = [char]27
+        Write-Output ""
+        Write-Output "$escape[7m$Title$escape[0m"
+        Write-Output ""
     }
 
 
 
-    Write-Output 'tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"'
+    Write-SectionTitle 'tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"'
     tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"
 
-    Write-Output "mypy --strict src/"
+    Write-SectionTitle "mypy --strict src/"
     & $python -m mypy --strict src/
 
-    Write-Output "pyinstrument src/main.py --nopause"
+    Write-SectionTitle "pyinstrument src/main.py --nopause"
     & $python -m pyinstrument src/main.py --nopause
 
     if ($env:SONAR_TOKEN) {
         $projectKey = "handsome-Druid_AICheck"
+        Write-SectionTitle "SonarCloud project status"
         Show-SonarCloudApiResult -Title "SonarCloud project status" -Uri "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$projectKey"
+        Write-SectionTitle "SonarCloud measures"
         Show-SonarCloudApiResult -Title "SonarCloud measures" -Uri "https://sonarcloud.io/api/measures/component?component=$projectKey&metricKeys=bugs,vulnerabilities,code_smells,coverage,ncloc,security_hotspots"
+        Write-SectionTitle "SonarCloud issues"
         Show-SonarCloudApiResult -Title "SonarCloud issues" -Uri "https://sonarcloud.io/api/issues/search?componentKeys=$projectKey&resolved=false&ps=100"
     }
 
 
     if (Get-Command "scc" -ErrorAction SilentlyContinue) {
-        Write-Output "scc"
+        Write-SectionTitle "scc"
         & scc
     }
 }
