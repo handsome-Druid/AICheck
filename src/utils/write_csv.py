@@ -43,10 +43,9 @@ def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) 
         Path(_path).resolve().parent, 
         exist_ok=True
     )
-    _write = sys.stdout.write
     first_class = next(results)
     cls = type(first_class)
-    
+
     if cls not in TYPE_CACHE:
         try:
             header = first_class.__slots__
@@ -57,27 +56,25 @@ def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) 
         else:
             getter_fn = operator.attrgetter(*header)
         TYPE_CACHE[cls] = (header, getter_fn)
-    
+
     header, getter = cast(tuple[tuple[str, ...], Callable[[T_Dataclass], Sequence[object]]], TYPE_CACHE[cls])
 
     _list = list
     _islice = islice
     _map = map
-    
+
     with open(_path, mode='w', newline='', encoding='utf-8-sig') as csvfile:
         _len = len
         _writer = csv.writer(csvfile)
         _writerow = _writer.writerow
         _writerows = _writer.writerows
-        
+
         _writerow(header)
         _writerow(getter(first_class))
-        _write(f"Wrote header and first row to {_path}\n")
-        
+
         while True:
-            chunk = _list(_islice(results, 5000))
-            if not chunk:
+            if chunk := _list(_islice(results, 5000)):
+                _writerows(_map(getter, chunk))
+            else:
                 break
-            _writerows(_map(getter, chunk))
-            _write(f"Wrote {_len(chunk)} rows to {_path}\n")
-        _write(f"Finished writing to {_path}\n")
+        sys.stdout.write(f"Finished writing to {_path}\n")

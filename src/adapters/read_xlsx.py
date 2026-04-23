@@ -14,13 +14,12 @@ except ImportError:
 
 
 def read_xlsx(path: str | PathLike[str] = get_config().xlsx_input_path) -> Iterator[CellGetValue]:
-
-	match sheet := CalamineWorkbook.from_path(str(path)).get_sheet_by_name(
-		sheet_name := get_config().xlsx_input_sheet_name
-	):
-		case None:
-			raise ValueError(
-				f"Sheet '{sheet_name}' not found in workbook '{path}'"
-			)
-		case _:
-			yield from iter(sheet.to_python())
+	sheet_name = get_config().xlsx_input_sheet_name
+	sheet = CalamineWorkbook.from_path(str(path)).get_sheet_by_name(sheet_name)
+	
+	if sheet is None:
+		raise ValueError(
+			f"Sheet '{sheet_name}' not found in workbook '{path}'"
+		)
+	
+	yield from sheet.to_python()

@@ -1,0 +1,6 @@
+{
+  "include": ["src"],
+  "exclude": ["**/node_modules", "**/__pycache__", ".venv", "**/.*"],
+  "typeCheckingMode": "strict",
+  "reportMissingTypeStubs": true
+}

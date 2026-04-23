@@ -2,7 +2,7 @@ from typing import TypeAlias, TypeVar, ClassVar, Protocol, Callable, Sequence
 from dataclasses import Field
 from datetime import datetime, date, time, timedelta
 
-CellGetValue: TypeAlias = list[int | float | str | bool | datetime | date | time | timedelta | None]
+CellGetValue: TypeAlias = list[int | float | str | bool | datetime | date | time | timedelta]
 
 class DataclassProtocol(Protocol):
     __dataclass_fields__: ClassVar[dict[str, Field[str]]]
