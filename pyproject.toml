@@ -10,4 +10,13 @@ dependencies = [
     "pyinstrument>=5.1.2",
     "pyright>=1.1.408",
     "python-calamine>=0.6.2",
+    "sourcery>=1.43.0",
 ]
+
+[dependency-groups]
+dev = [
+    "coverage>=7.13.5",
+]
+
+[tool.mypy]
+exclude = ["(^|/)output(/|$)"]

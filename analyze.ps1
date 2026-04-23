@@ -1,4 +1,4 @@
-function Analyze-Project {
+function Invoke-ProjectAnalysis {
 $python = ".\.venv\Scripts\python.exe"
 
     [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
@@ -31,10 +31,9 @@ $python = ".\.venv\Scripts\python.exe"
         param(
             [string]$Title
         )
-
-        $escape = [char]27
+        Start-Sleep -Seconds 1
         Write-Output ""
-        Write-Output "$escape[7m$Title$escape[0m"
+        Write-Output "===== $Title ====="
         Write-Output ""
     }
 
@@ -43,8 +42,18 @@ $python = ".\.venv\Scripts\python.exe"
     Write-SectionTitle 'tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"'
     tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"
 
-    Write-SectionTitle "mypy --strict src/"
-    & $python -m mypy --strict src/
+    Write-SectionTitle "mypy --strict ./"
+    & $python -m mypy --strict ./
+
+    Write-SectionTitle "pyright ./"
+    & $python -m pyright ./
+
+    Write-SectionTitle "coverage"
+    & $python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
+    & $python -m coverage report -m --fail-under=95
+
+    Write-SectionTitle "sourcery review ./"
+    & $python -m sourcery review ./
 
     Write-SectionTitle "pyinstrument src/main.py --nopause"
     & $python -m pyinstrument src/main.py --nopause
@@ -66,4 +75,4 @@ $python = ".\.venv\Scripts\python.exe"
     }
 }
 
-& Analyze-Project | tee .\analyze.txt
+& Invoke-ProjectAnalysis | Tee-Object .\analyze.txt
