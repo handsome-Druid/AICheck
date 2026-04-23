@@ -36,7 +36,6 @@ function Invoke-ProjectAnalysis {
 
         Write-Output ""
         Write-Output "===== $Title ====="
-        Write-Output ""
     }
 
 
