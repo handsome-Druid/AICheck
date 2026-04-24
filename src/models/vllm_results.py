@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class VLLMTestResult:
     ip: str
     port: int
+    container_name:str
     status: str
     message: str
     actual_model: list[str]

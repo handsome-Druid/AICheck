@@ -98,8 +98,8 @@ class TestControllerHelpers(unittest.TestCase):
 
     def test_iter_queue_results_stops_at_sentinel(self) -> None:
         queue: Queue[object] = Queue()
-        first = VLLMTestResult("127.0.0.1", 8000, "success", "ok", ["m1"], ["m1"], [], [], 0.1)
-        second = VLLMTestResult("127.0.0.2", 8001, "failed", "bad", [], ["m2"], [], ["m2"], 0.2)
+        first = VLLMTestResult("127.0.0.1", 8000, "c1", "success", "ok", ["m1"], ["m1"], [], [], 0.1)
+        second = VLLMTestResult("127.0.0.2", 8001, "c2", "failed", "bad", [], ["m2"], [], ["m2"], 0.2)
         queue.put(first)
         queue.put(second)
         queue.put(controller_module.RESULT_SENTINEL)
@@ -109,10 +109,17 @@ class TestControllerHelpers(unittest.TestCase):
 
 class TestControllerRun(unittest.IsolatedAsyncioTestCase):
     async def test_run_processes_results_and_prints_summary(self) -> None:
-        result = VLLMTestResult("127.0.0.1", 8000, "success", "ok", ["m1"], ["m1"], [], [], 0.1)
-        sheet_one = SimpleNamespace(end="GO", call_method="https://example.com/chat/completions", port=8000, model_id="m1")
-        sheet_two = SimpleNamespace(end="STOP", call_method="https://example.com/chat/completions", port=8001, model_id="m2")
-        config = SimpleNamespace(end_tag="end", end_value="STOP", csv_output_path=tempfile.gettempdir(), xlsx_input_path="ignored.xlsx")
+        result = VLLMTestResult("127.0.0.1", 8000, "c1", "success", "ok", ["m1"], ["m1"], [], [], 0.1)
+        sheet_one = SimpleNamespace(end="GO", call_method="https://example.com/chat/completions", port=8000, model_id="m1", container_name="c1")
+        sheet_two = SimpleNamespace(end="STOP", call_method="https://example.com/chat/completions", port=8001, model_id="m2", container_name="c2")
+        config = SimpleNamespace(
+            end_tag="end", 
+            end_value="STOP", 
+            pass_tag=[], 
+            pass_value=[], 
+            csv_output_path=tempfile.gettempdir(), 
+            xlsx_input_path="ignored.xlsx"
+        )
 
         def fake_to_thread(func: Callable[..., object], *args: object, **kwargs: object) -> object:
             return func(*args, **kwargs)

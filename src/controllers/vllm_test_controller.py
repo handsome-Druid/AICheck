@@ -34,52 +34,64 @@ def iter_queue_results(result_queue: Queue[object]) -> Iterator[VLLMTestResult]:
         yield cast(VLLMTestResult, item)
 
 
-async def run() -> None:
-    async def results() -> AsyncIterator[VLLMTestResult]:
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
-            end_tag = get_config().end_tag
-            end_value = get_config().end_value
+def iter_filtered_sheets() -> Iterator[Sheet]:
+    config = get_config()
+    end_getter = operator.attrgetter(config.end_tag) if config.end_tag else None
 
-            def bounded_sheets() -> Iterator[Sheet]:
-                _getter = operator.attrgetter(end_tag)
-                for sheet in get_sheet_iterator():
-                    if _getter(sheet) == end_value:
-                        break
-                    yield sheet
+    for sheet in get_sheet_iterator():
+        if end_getter and end_getter(sheet) == config.end_value:
+            break
 
-            for batch in iter_batches(bounded_sheets(), MAX_CONCURRENT_REQUESTS):
-                batch_results = await asyncio.gather(
-                    *(
-                        check_vllm_models(
-                            client=client,
-                            url=sheet.call_method,
-                            port=sheet.port,
-                            expected_models=[sheet.model_id],
-                            api_key=None,
-                        )
-                        for sheet in batch
-                    )
+        if all(
+            getattr(sheet, p_tag, None) != p_val
+            for p_tag, p_val in zip(config.pass_tag, config.pass_value)
+        ):
+            yield sheet
+
+
+async def iter_results(client: httpx.AsyncClient) -> AsyncIterator[VLLMTestResult]:
+    for batch in iter_batches(iter_filtered_sheets(), MAX_CONCURRENT_REQUESTS):
+        batch_results = await asyncio.gather(
+            *(
+                check_vllm_models(
+                    client=client,
+                    url=sheet.call_method,
+                    port=sheet.port,
+                    expected_models=[sheet.model_id],
+                    api_key=None,
+                    container_name=sheet.container_name
                 )
-                for result in batch_results:
-                    yield result
+                for sheet in batch
+            )
+        )
+        for result in batch_results:
+            yield result
 
-    csv_path = Path(get_config().csv_output_path) / f"vllm_test_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+async def fanout_result(result: object, print_queue: Queue[object], csv_queue: Queue[object]) -> None:
+    await asyncio.gather(
+        asyncio.to_thread(print_queue.put, result),
+        asyncio.to_thread(csv_queue.put, result),
+    )
+
+
+def build_csv_path() -> Path:
+    return Path(get_config().csv_output_path) / f"vllm_test_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+
+
+async def run() -> None:
+    csv_path = build_csv_path()
     print_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
     csv_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
 
     print_task = asyncio.create_task(asyncio.to_thread(test_print_from_dataclass, iter_queue_results(print_queue)))
     csv_task = asyncio.create_task(asyncio.to_thread(write_csv_from_dataclass, iter_queue_results(csv_queue), csv_path))
 
-    async for result in results():
-        await asyncio.gather(
-            asyncio.to_thread(print_queue.put, result),
-            asyncio.to_thread(csv_queue.put, result),
-        )
+    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+        async for result in iter_results(client):
+            await fanout_result(result, print_queue, csv_queue)
 
-    await asyncio.gather(
-        asyncio.to_thread(print_queue.put, RESULT_SENTINEL),
-        asyncio.to_thread(csv_queue.put, RESULT_SENTINEL),
-    )
+    await fanout_result(RESULT_SENTINEL, print_queue, csv_queue)
 
     rows_written = await csv_task
     await print_task

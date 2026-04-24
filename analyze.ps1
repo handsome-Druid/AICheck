@@ -66,7 +66,7 @@ function Invoke-ProjectAnalysis {
     & python -m coverage report -m --fail-under=100
 
     Write-SectionTitle "pyinstrument src/main.py --nogui --nopause"
-    & python -m pyinstrument src/main.py --nogui --nopause 2>1&
+    & python -m pyinstrument src/main.py --nogui --nopause 2>&1
 
     if ($env:SONAR_TOKEN) {
         $projectKey = "handsome-Druid_AICheck"

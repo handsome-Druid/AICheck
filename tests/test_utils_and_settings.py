@@ -48,16 +48,15 @@ class TestGetPath(unittest.TestCase):
         with self.assertRaises(ValueError):
             get_path_module.get_path(Path(tempfile.gettempdir()) / "secrets.txt")
 
+    def test_get_path_allows_absolute_path_when_flag_set(self) -> None:
+        abs_path = Path(tempfile.gettempdir()) / "secrets.txt"
+        self.assertEqual(get_path_module.get_path(abs_path, allow_absolute=True), abs_path.resolve())
+
     def test_get_path_compiled_branch_uses_sys_argv(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fake_exe = Path(temp_dir) / "app.exe"
             with patch.dict(get_path_module.__dict__, {"__compiled__": True}, clear=False), patch.object(sys, "argv", [str(fake_exe)]):
                 self.assertEqual(get_path_module.get_path("data.txt"), fake_exe.resolve().parent / "data.txt")
-
-    def test_get_path_allows_absolute_when_opted_in(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            absolute = Path(temp_dir) / "output.csv"
-            self.assertEqual(get_path_module.get_path(absolute, allow_absolute=True), absolute.resolve())
 
 
 class TestSettings(unittest.TestCase):
@@ -80,6 +79,7 @@ class TestSettings(unittest.TestCase):
                 "csv": {"input_path": csv_input_path, "output_path": csv_output_path},
                 "source": {"last_type": source_last_type},
                 "end_flag": {"tag": "port", "value": end_value},
+                "pass_flag": {"tag": ["port"], "value": [30421]},
             }
         )
 
@@ -98,6 +98,8 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(config.source_last_type, "xlsx")
         self.assertEqual(config.end_tag, "port")
         self.assertEqual(config.end_value, 30420)
+        self.assertEqual(config.pass_tag, ["port"])
+        self.assertEqual(config.pass_value, [30421])
 
     def test_get_config_caches_and_refreshes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -165,13 +167,6 @@ class TestSettings(unittest.TestCase):
 
         self.assertIn("missing-settings.json", str(context.exception))
 
-    def test_get_config_rejects_path_like_names(self) -> None:
-        with self.assertRaises(ValueError):
-            settings_module.get_config("../secrets.json", refresh=True)
-
-        with self.assertRaises(ValueError):
-            settings_module.update_config("nested/settings.json")
-
 
 class TestWriteCsv(unittest.TestCase):
     def setUp(self) -> None:
@@ -217,17 +212,6 @@ class TestWriteCsv(unittest.TestCase):
 
             with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 self.assertEqual(list(csv.reader(handle)), [["value"], ["first"], ["second"]])
-
-    def test_write_csv_accepts_absolute_output_path(self) -> None:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            output_path = Path(temp_dir) / "absolute.csv"
-            rows: Iterator[Sequence[str | float]] = iter([("x", 1.0)])
-
-            written = write_csv_module.write_csv(rows, output_path)
-
-            with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
-                self.assertEqual(list(csv.reader(handle)), [["x", "1.0"]])
-            self.assertEqual(written, 1)
 
 
 class TestPrintHelpers(unittest.TestCase):

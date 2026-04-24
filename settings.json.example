@@ -12,6 +12,10 @@
     },
     "end_flag": {
         "tag": "str",
-        "value": object
+        "value": "object"
+    },
+    "pass_flag": {
+        "tag": [],
+        "value": []
     }
 }

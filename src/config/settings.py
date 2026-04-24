@@ -1,6 +1,5 @@
 import json
 from dataclasses import dataclass, field, fields
-from pathlib import Path
 from typing import ClassVar, Callable, Self
 try:
     from src.utils.get_path import get_path
@@ -19,6 +18,8 @@ class JsonConfig:
     source_last_type: str = field(metadata={"path": ("source", "last_type")})
     end_tag: str = field(metadata={"path": ("end_flag", "tag")})
     end_value: str = field(metadata={"path": ("end_flag", "value")})
+    pass_tag: list[str] = field(metadata={"path": ("pass_flag", "tag")})
+    pass_value: list[object] = field(metadata={"path": ("pass_flag", "value")})
 
 
     _cache: ClassVar[dict[type, Callable[[dict[str, object]], Self]]] = {}
@@ -57,29 +58,21 @@ class JsonConfig:
 
 
 
+import os
+
 json_config: dict[str, JsonConfig] = {}
-
-
-def _normalize_config_name(config_name: str) -> str:
-    candidate = Path(config_name)
-    if candidate.is_absolute() or candidate.name != config_name or any(part == ".." for part in candidate.parts):
-        raise ValueError(f"Invalid configuration file name: {config_name}")
-
-    return candidate.name
-
-
 def get_config(_json: str = "settings.json", refresh: bool = False) -> JsonConfig:
+    _json = os.path.basename(_json)
     global json_config
-    config_name = _normalize_config_name(_json)
-    if config_name not in json_config or refresh:
+    if _json not in json_config or refresh:
         try:
-            json_config[config_name] = JsonConfig.from_json(
-                get_path(config_name)
+            json_config[_json] = JsonConfig.from_json(
+                get_path(_json)
                 .read_text(encoding="utf-8")
             )
         except FileNotFoundError as e:
-            raise FileNotFoundError(f"Configuration file '{config_name}' not found.") from e
-    return json_config[config_name]
+            raise FileNotFoundError(f"Configuration file '{_json}' not found.") from e
+    return json_config[_json]
 
 
 def update_config(
@@ -91,8 +84,8 @@ def update_config(
     csv_output_path: str | None = None,
     source_last_type: str | None = None,
 ) -> JsonConfig:
-    config_name = _normalize_config_name(_json)
-    config_path = get_path(config_name)
+    _json = os.path.basename(_json)
+    config_path = get_path(_json)
     data = json.loads(config_path.read_text(encoding="utf-8"))
 
     if xlsx_input_path is not None:
@@ -111,8 +104,8 @@ def update_config(
         data.setdefault("source", {})["last_type"] = source_last_type
 
     config_path.write_text(json.dumps(data, ensure_ascii=False, indent=4), encoding="utf-8")
-    json_config.pop(config_name, None)
-    return get_config(config_name, refresh=True)
+    json_config.pop(_json, None)
+    return get_config(_json, refresh=True)
 
 def main() -> None:
         config = get_config()

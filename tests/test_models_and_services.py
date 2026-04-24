@@ -340,6 +340,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 client=client,
                 url="https://example.com/chat/completions",
                 port=8000,
+                container_name="test_c",
                 expected_models=case.expected_models,
                 api_key=case.api_key,
             )
@@ -405,6 +406,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 client=timeout_client,
                 url="https://example.com/chat/completions",
                 port=8000,
+                container_name="test_c",
                 expected_models=["m1"],
             )
         self.assertEqual(timeout_result.status, "timeout")
@@ -417,6 +419,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 client=request_client,
                 url="https://example.com/chat/completions",
                 port=8000,
+                container_name="test_c",
                 expected_models=["m1"],
             )
         self.assertEqual(request_result.status, "failed")
@@ -429,6 +432,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 client=unknown_client,
                 url="https://example.com/chat/completions",
                 port=8000,
+                container_name="test_c",
                 expected_models=["m1"],
             )
         self.assertEqual(unknown_result.status, "failed")
