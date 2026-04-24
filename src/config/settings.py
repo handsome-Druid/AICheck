@@ -66,10 +66,9 @@ def get_config(_json: str = "settings.json", refresh: bool = False) -> JsonConfi
     global json_config
     if _json not in json_config or refresh:
         try:
-            json_config[_json] = JsonConfig.from_json(
-                get_path(_json)
-                .read_text(encoding="utf-8")
-            )
+            with open(get_path(_json), "r", encoding="utf-8") as f:
+                json_content = f.read()
+            json_config[_json] = JsonConfig.from_json(json_content)
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Configuration file '{_json}' not found.") from e
     return json_config[_json]
@@ -86,7 +85,9 @@ def update_config(
 ) -> JsonConfig:
     _json = os.path.basename(_json)
     config_path = get_path(_json)
-    data = json.loads(config_path.read_text(encoding="utf-8"))
+    
+    with open(config_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
 
     if xlsx_input_path is not None:
         data.setdefault("xlsx", {})["input_path"] = xlsx_input_path
@@ -103,7 +104,9 @@ def update_config(
     if source_last_type is not None:
         data.setdefault("source", {})["last_type"] = source_last_type
 
-    config_path.write_text(json.dumps(data, ensure_ascii=False, indent=4), encoding="utf-8")
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+        
     json_config.pop(_json, None)
     return get_config(_json, refresh=True)
 
