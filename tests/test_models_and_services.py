@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import importlib
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,7 @@ from unittest.mock import AsyncMock, patch
 import httpx
 
 read_xlsx_module = importlib.import_module("src.adapters.read_xlsx")
+read_csv_module = importlib.import_module("src.adapters.read_csv")
 from src.models import sheet as sheet_module
 from src.models.type import CellGetValue
 from src.models.vllm_results import VLLMTestResult
@@ -88,8 +90,12 @@ class TestSheetAndAdapter(unittest.TestCase):
         ]
         row: CellGetValue = [30002, "model-d", "name-d", "monitor-d", "L40", 8, 32, "container-d", "https://d/chat/completions"]
 
-        with patch("src.models.sheet.read_xlsx", return_value=iter([header, row])):
-            results = list(sheet_module.Sheet.from_reader())
+        config = SimpleNamespace(xlsx_input_path="input.xlsx", csv_input_path="ignored.csv", source_last_type="xlsx")
+
+        with patch("src.models.sheet.get_config", return_value=config), patch(
+            "src.models.sheet.read_xlsx", return_value=iter([header, row])
+        ):
+            results: list[sheet_module.Sheet] = list(sheet_module.get_sheet_iterator())
 
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].model_id, "model-d")
@@ -187,6 +193,99 @@ class TestSheetAndAdapter(unittest.TestCase):
             third = sheet_module.get_sheet_iterator("input.xlsx", refresh=True)
             self.assertIsNot(first, third)
             self.assertEqual(len(list(third)), 1)
+
+    def test_get_sheet_iterator_uses_csv_reader_when_config_says_csv(self) -> None:
+        header = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row = [30005, "model-g", "name-g", "monitor-g", "A10", 1, 4, "container-g", "https://g/chat/completions"]
+        config = SimpleNamespace(csv_input_path="input.csv", xlsx_input_path="ignored.xlsx", source_last_type="csv")
+
+        with patch("src.models.sheet.get_config", return_value=config), patch(
+            "src.models.sheet.read_csv", return_value=iter([header, row])
+        ) as csv_mock:
+            results = list(sheet_module.get_sheet_iterator())
+
+        csv_mock.assert_called_once_with(Path("input.csv"))
+        self.assertEqual(results[0].model_id, "model-g")
+
+    def test_get_sheet_iterator_uses_csv_reader_for_explicit_csv_path(self) -> None:
+        header = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row = [30007, "model-i", "name-i", "monitor-i", "L4", 3, 24, "container-i", "https://i/chat/completions"]
+
+        with patch("src.models.sheet.read_csv", return_value=iter([header, row])) as csv_mock:
+            results = list(sheet_module.get_sheet_iterator("input.csv"))
+
+        csv_mock.assert_called_once_with(Path("input.csv"))
+        self.assertEqual(results[0].model_id, "model-i")
+
+    def test_get_sheet_iterator_defaults_to_xlsx_when_source_type_is_unknown(self) -> None:
+        header = [
+            "port",
+            "modelID",
+            "模型名",
+            "监控id",
+            "GPU型号",
+            "GPU数量",
+            "上下文长度（K）",
+            "容器名",
+            "调用方法",
+        ]
+        row = [30006, "model-h", "name-h", "monitor-h", "A30", 2, 64, "container-h", "https://h/chat/completions"]
+        config = SimpleNamespace(csv_input_path="ignored.csv", xlsx_input_path="fallback.xlsx", source_last_type="unknown")
+
+        with patch("src.models.sheet.get_config", return_value=config), patch(
+            "src.models.sheet.read_xlsx", return_value=iter([header, row])
+        ) as xlsx_mock:
+            results = list(sheet_module.get_sheet_iterator())
+
+        xlsx_mock.assert_called_once_with(Path("fallback.xlsx"))
+        self.assertEqual(results[0].model_id, "model-h")
+
+    def test_main_delegates_to_print_and_write_helpers(self) -> None:
+        sentinel_iterator = object()
+
+        with patch("src.models.sheet.get_sheet_iterator", return_value=sentinel_iterator) as iterator_mock, patch(
+            "src.models.sheet.test_print_from_dataclass"
+        ) as print_mock, patch("src.models.sheet.write_csv_from_dataclass") as write_mock, patch(
+            "src.models.sheet.get_config", return_value=SimpleNamespace(csv_output_path="output")
+        ):
+            sheet_module.main()
+
+        self.assertEqual(iterator_mock.call_count, 2)
+        print_mock.assert_called_once_with(sentinel_iterator)
+        write_mock.assert_called_once_with(sentinel_iterator, Path("output") / "test_sheet.csv")
+
+    def test_read_csv_yields_rows_and_raises_when_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "rows.csv"
+            csv_path.write_text("a,b\n1,2\n", encoding="utf-8-sig")
+
+            self.assertEqual(list(read_csv_module.read_csv(csv_path)), [["a", "b"], ["1", "2"]])
+
+            missing_path = Path(temp_dir) / "missing.csv"
+            with self.assertRaises(FileNotFoundError) as context:
+                list(read_csv_module.read_csv(missing_path))
+
+        self.assertIn("missing.csv", str(context.exception))
 
     def test_read_xlsx_yields_rows(self) -> None:
         fake_sheet = FakeSheet([[1, 2], [3, 4]])

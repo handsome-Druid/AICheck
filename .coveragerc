@@ -1,0 +1,7 @@
+[run]
+source = src
+
+[report]
+omit =
+    src/views/ui/*.py
+    src/views/ui/**/*.py

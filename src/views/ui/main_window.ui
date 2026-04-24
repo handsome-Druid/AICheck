@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>920</width>
-    <height>680</height>
+    <height>760</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -52,11 +52,37 @@
      </item>
     </layout>
    </widget>
+    <widget class="QGroupBox" name="groupBoxSheetName">
+     <property name="geometry">
+      <rect>
+        <x>18</x>
+        <y>90</y>
+        <width>881</width>
+        <height>58</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string>Sheet 名称</string>
+     </property>
+     <widget class="QLineEdit" name="lineEditSheetName">
+      <property name="geometry">
+        <rect>
+         <x>10</x>
+         <y>26</y>
+         <width>861</width>
+         <height>23</height>
+        </rect>
+      </property>
+      <property name="placeholderText">
+        <string>请输入 Sheet 名称</string>
+      </property>
+     </widget>
+    </widget>
    <widget class="QGroupBox" name="groupBoxOutputDir">
     <property name="geometry">
      <rect>
       <x>18</x>
-      <y>90</y>
+        <y>162</y>
       <width>881</width>
       <height>58</height>
      </rect>
@@ -94,7 +120,7 @@
     <property name="geometry">
      <rect>
       <x>18</x>
-      <y>162</y>
+    <y>234</y>
       <width>884</width>
       <height>381</height>
      </rect>
@@ -123,7 +149,7 @@
     <property name="geometry">
      <rect>
       <x>370</x>
-      <y>560</y>
+    <y>632</y>
       <width>160</width>
       <height>40</height>
      </rect>

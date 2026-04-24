@@ -13,7 +13,9 @@ except ImportError:
 class JsonConfig:
     xlsx_input_path: str = field(metadata={"path": ("xlsx", "input_path")})
     xlsx_input_sheet_name: str = field(metadata={"path": ("xlsx", "input_sheet_name")})
+    csv_input_path: str = field(metadata={"path": ("csv", "input_path")})
     csv_output_path: str = field(metadata={"path": ("csv", "output_path")})
+    source_last_type: str = field(metadata={"path": ("source", "last_type")})
     end_tag: str = field(metadata={"path": ("end_flag", "tag")})
     end_value: str = field(metadata={"path": ("end_flag", "value")})
 
@@ -66,6 +68,38 @@ def get_config(_json: str = "settings.json", refresh: bool = False) -> JsonConfi
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Configuration file '{_json}' not found.") from e
     return json_config[_json]
+
+
+def update_config(
+    _json: str = "settings.json",
+    *,
+    xlsx_input_path: str | None = None,
+    xlsx_input_sheet_name: str | None = None,
+    csv_input_path: str | None = None,
+    csv_output_path: str | None = None,
+    source_last_type: str | None = None,
+) -> JsonConfig:
+    config_path = get_path(_json)
+    data = json.loads(config_path.read_text(encoding="utf-8"))
+
+    if xlsx_input_path is not None:
+        data.setdefault("xlsx", {})["input_path"] = xlsx_input_path
+
+    if xlsx_input_sheet_name is not None:
+        data.setdefault("xlsx", {})["input_sheet_name"] = xlsx_input_sheet_name
+
+    if csv_input_path is not None:
+        data.setdefault("csv", {})["input_path"] = csv_input_path
+
+    if csv_output_path is not None:
+        data.setdefault("csv", {})["output_path"] = csv_output_path
+
+    if source_last_type is not None:
+        data.setdefault("source", {})["last_type"] = source_last_type
+
+    config_path.write_text(json.dumps(data, ensure_ascii=False, indent=4), encoding="utf-8")
+    json_config.pop(_json, None)
+    return get_config(_json, refresh=True)
 
 def main() -> None:
         config = get_config()

@@ -2,6 +2,7 @@ from dataclasses import dataclass, fields, field
 from typing import ClassVar, Callable, Iterator, Self, cast
 from pathlib import Path
 try:
+    from src.adapters.read_csv import read_csv
     from src.adapters.read_xlsx import read_xlsx
     from src.models.type import CellGetValue
     from src.config import get_config
@@ -11,6 +12,7 @@ except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+    from src.adapters.read_csv import read_csv
     from src.adapters.read_xlsx import read_xlsx
     from src.models.type import CellGetValue
     from src.config import get_config
@@ -34,9 +36,7 @@ class Sheet:
     _tags: ClassVar[tuple[str, ...]] = ()
 
     @classmethod
-    def from_reader(cls, reader: Iterator[CellGetValue] | None = None) -> Iterator[Self]:
-        if reader is None:
-            reader = read_xlsx()
+    def from_reader(cls, reader: Iterator[CellGetValue]) -> Iterator[Self]:
 
         header_map = {name: i for i, name in enumerate(next(reader))}
 
@@ -66,33 +66,32 @@ class Sheet:
                 index = header_map[f.metadata["tag"]]
                 value_type = f.metadata["type"]
 
-                match value_type.__name__:
-                    case "int":
-                        lines.extend(
-                            [
-                                "    try:",
-                                f"        {f.name} = _int(row[{index}])",
-                                "    except (TypeError, ValueError):",
-                                f"        {f.name} = 0",
-                            ]
-                        )
-                    case "float":
-                        lines.extend(
-                            [
-                                "    try:",
-                                f"        {f.name} = _float(row[{index}])",
-                                "    except (TypeError, ValueError):",
-                                f"        {f.name} = 0.0",
-                            ]
-                        )
-                    case "str":
-                        lines.append(
-                            f"    {f.name} = '' if row[{index}] is None else _str(row[{index}])"
-                        )
-                    case "bool":
-                        lines.append(f"    {f.name} = _bool(row[{index}])")
-                    case _:
-                        lines.append(f"    {f.name} = row[{index}]")
+                if value_type is int:
+                    lines.extend(
+                        [
+                            "    try:",
+                            f"        {f.name} = _int(row[{index}])",
+                            "    except (TypeError, ValueError):",
+                            f"        {f.name} = 0",
+                        ]
+                    )
+                elif value_type is float:
+                    lines.extend(
+                        [
+                            "    try:",
+                            f"        {f.name} = _float(row[{index}])",
+                            "    except (TypeError, ValueError):",
+                            f"        {f.name} = 0.0",
+                        ]
+                    )
+                elif value_type is str:
+                    lines.append(
+                        f"    {f.name} = '' if row[{index}] is None else _str(row[{index}])"
+                    )
+                elif value_type is bool:
+                    lines.append(f"    {f.name} = _bool(row[{index}])")
+                else:
+                    lines.append(f"    {f.name} = row[{index}]")
 
                 kwargs.append(f"{f.name}={f.name}")
 
@@ -105,11 +104,36 @@ class Sheet:
         for row in reader:
             yield loader(row)
 
-_sheet_cache: dict[str, Iterator[Sheet]] = {}
-def get_sheet_iterator(path: str | Path = get_config().xlsx_input_path, refresh: bool = True) -> Iterator[Sheet]:
-    if refresh or str(path) not in _sheet_cache:
-        _sheet_cache[str(path)] = Sheet.from_reader(read_xlsx(path))
-    return _sheet_cache[str(path)]
+_sheet_cache: dict[tuple[str, str], Iterator[Sheet]] = {}
+def get_sheet_iterator(path: str | Path | None = None, refresh: bool = True) -> Iterator[Sheet]:
+    config = get_config()
+
+    match path:
+        case str() | Path() as selected_path:
+            source_path = Path(selected_path)
+            match source_path.suffix.lower():
+                case ".csv":
+                    source_type = "csv"
+                case _:
+                    source_type = "xlsx"
+        case None:
+            match config.source_last_type:
+                case "csv":
+                    source_path = Path(config.csv_input_path)
+                    source_type = "csv"
+                case "xlsx":
+                    source_path = Path(config.xlsx_input_path)
+                    source_type = "xlsx"
+                case _:
+                    source_path = Path(config.xlsx_input_path)
+                    source_type = "xlsx"
+
+    cache_key = (source_type, str(source_path))
+
+    if refresh or cache_key not in _sheet_cache:
+        reader = read_csv(source_path) if source_type == "csv" else read_xlsx(source_path)
+        _sheet_cache[cache_key] = Sheet.from_reader(reader)
+    return _sheet_cache[cache_key]
 
 def main() -> None:
     test_print_from_dataclass(get_sheet_iterator())

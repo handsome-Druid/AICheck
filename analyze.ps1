@@ -14,6 +14,22 @@ function Invoke-ProjectAnalysis {
         $env:SONAR_TOKEN = (Get-Content ".\sonar-token.txt" -Raw).Trim()
     }
 
+    function Write-SectionTitle {
+        param(
+            [string]$Title
+        )
+
+        Write-Output ""
+        Write-Output "===== $Title ====="
+    }
+
+    Write-SectionTitle "uv sync"
+    uv sync 2>&1
+
+    Write-SectionTitle "pyside6-uic src/views/ui/main_window.ui -o src/views/ui/main_window_ui.py"
+    & .venv\Scripts\pyside6-uic.exe ".\src\views\ui\main_window.ui" -o ".\src\views\ui\main_window_ui.py"
+    & Get-Item "src\views\ui\main_window_ui.py"
+
     function Get-SonarCloudHeaders {
         $pair = "$($env:SONAR_TOKEN):"
         $encoded = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
@@ -29,19 +45,10 @@ function Invoke-ProjectAnalysis {
         Invoke-RestMethod -Uri $Uri -Headers (Get-SonarCloudHeaders) | ConvertTo-Json -Depth 10
     }
 
-    function Write-SectionTitle {
-        param(
-            [string]$Title
-        )
-
-        Write-Output ""
-        Write-Output "===== $Title ====="
+    if (Get-Command "git" -ErrorAction SilentlyContinue) {
+        Write-SectionTitle "git ls-files"
+        & git ls-files
     }
-
-
-
-    Write-SectionTitle 'tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"'
-    tree.exe -I ".venv|output|__pycache__|.git|.github|.vscode|.devcontainer"
 
     Write-SectionTitle "mypy --strict ./"
     & python -m mypy --strict ./
@@ -52,12 +59,14 @@ function Invoke-ProjectAnalysis {
     Write-SectionTitle "sourcery review ./"
     & .venv\Scripts\sourcery.exe review ./ 2>&1
 
-    Write-SectionTitle "coverage"
-    & python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
-    & python -m coverage report -m --fail-under=95
+    Write-SectionTitle "coverage run --source=src -m unittest discover -s tests -p "test_*.py""
+    & python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py" 2>&1
 
-    Write-SectionTitle "pyinstrument src/main.py --nopause"
-    & python -m pyinstrument src/main.py --nopause
+    Write-SectionTitle "coverage report -m --fail-under=100"
+    & python -m coverage report -m --fail-under=100
+
+    Write-SectionTitle "pyinstrument src/main.py --nogui --nopause"
+    & python -m pyinstrument src/main.py --nogui --nopause
 
     if ($env:SONAR_TOKEN) {
         $projectKey = "handsome-Druid_AICheck"
@@ -76,4 +85,14 @@ function Invoke-ProjectAnalysis {
     }
 }
 
-& Invoke-ProjectAnalysis | Tee-Object .\analyze.txt
+if (Get-Command "uv" -ErrorAction SilentlyContinue) {
+    $analysisOutput = Join-Path $env:TEMP "AICheck-analyze.txt"
+    try {
+        & Invoke-ProjectAnalysis | Tee-Object $analysisOutput
+        Copy-Item $analysisOutput .\analyze.txt -Force
+    } catch {
+        & Invoke-ProjectAnalysis
+    }
+} else {
+    Write-Output "uv is not installed. Please install uv to run the project analysis."
+}

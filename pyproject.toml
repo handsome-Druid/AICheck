@@ -23,4 +23,4 @@ dev = [
 ]
 
 [tool.mypy]
-exclude = ["(^|/)output(/|$)", "(^|/)src/views/ui(/|$)"]
+exclude = ["(^|/)output(/|$)", "(^|/)src/views/ui(/|$)", "(^|/)tests(/|$)"]

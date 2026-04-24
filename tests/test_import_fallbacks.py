@@ -9,12 +9,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
 from types import ModuleType
-from typing import Iterator
+from typing import Generator
 from unittest.mock import patch
 
 
 @contextmanager
-def _force_import_error_once(target: str) -> Iterator[None]:
+def _force_import_error_once(target: str) -> Generator[None, None, None]:
     original_import = builtins.__import__
     state = {"raised": False}
     saved_module = sys.modules.pop(target, None)
@@ -65,6 +65,14 @@ class TestImportFallbacks(unittest.TestCase):
 
         self.assertIn("read_xlsx", namespace)
 
+    def test_read_csv_module_uses_import_fallback(self) -> None:
+        read_csv_path = Path(__file__).resolve().parents[1] / "src" / "adapters" / "read_csv.py"
+
+        with _force_import_error_once("src.models.type"):
+            namespace = runpy.run_path(str(read_csv_path), run_name="not_main")
+
+        self.assertIn("read_csv", namespace)
+
     def test_sheet_module_uses_import_fallback_and_main_block(self) -> None:
         sheet_path = Path(__file__).resolve().parents[1] / "src" / "models" / "sheet.py"
 
@@ -75,7 +83,9 @@ class TestImportFallbacks(unittest.TestCase):
             return_value=SimpleNamespace(
                 xlsx_input_path="ignored.xlsx",
                 xlsx_input_sheet_name="Sheet1",
+                csv_input_path="ignored.csv",
                 csv_output_path=tempfile.gettempdir(),
+                source_last_type="xlsx",
             ),
         ), patch(
             "src.utils.test_print.test_print_from_dataclass"

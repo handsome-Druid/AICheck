@@ -57,13 +57,16 @@ class TestSettings(unittest.TestCase):
         self,
         xlsx_input_path: str,
         xlsx_input_sheet_name: str,
+        csv_input_path: str,
         csv_output_path: str,
+        source_last_type: str,
         end_value: int,
     ) -> str:
         return json.dumps(
             {
                 "xlsx": {"input_path": xlsx_input_path, "input_sheet_name": xlsx_input_sheet_name},
-                "csv": {"output_path": csv_output_path},
+                "csv": {"input_path": csv_input_path, "output_path": csv_output_path},
+                "source": {"last_type": source_last_type},
                 "end_flag": {"tag": "port", "value": end_value},
             }
         )
@@ -73,12 +76,14 @@ class TestSettings(unittest.TestCase):
 
     def test_json_config_from_json(self) -> None:
         config = settings_module.JsonConfig.from_json(
-            self._make_config_payload("input.xlsx", "Sheet1", "output/", 30420)
+            self._make_config_payload("input.xlsx", "Sheet1", "input.csv", "output/", "xlsx", 30420)
         )
 
         self.assertEqual(config.xlsx_input_path, "input.xlsx")
         self.assertEqual(config.xlsx_input_sheet_name, "Sheet1")
+        self.assertEqual(config.csv_input_path, "input.csv")
         self.assertEqual(config.csv_output_path, "output/")
+        self.assertEqual(config.source_last_type, "xlsx")
         self.assertEqual(config.end_tag, "port")
         self.assertEqual(config.end_value, 30420)
 
@@ -87,7 +92,7 @@ class TestSettings(unittest.TestCase):
             config_path = Path(temp_dir) / "settings.json"
             self._write_config_file(
                 config_path,
-                self._make_config_payload("input-a.xlsx", "Sheet1", "output-a/", 30420),
+                self._make_config_payload("input-a.xlsx", "Sheet1", "input-a.csv", "output-a/", "xlsx", 30420),
             )
 
             with patch("src.config.settings.get_path", return_value=config_path):
@@ -99,16 +104,44 @@ class TestSettings(unittest.TestCase):
 
         self._write_config_file(
             config_path,
-            self._make_config_payload("input-b.xlsx", "Sheet2", "output-b/", 40000),
+            self._make_config_payload("input-b.xlsx", "Sheet2", "input-b.csv", "output-b/", "csv", 40000),
         )
 
         cached = settings_module.get_config("custom.json")
         self.assertIs(first, cached)
         self.assertEqual(cached.xlsx_input_path, "input-a.xlsx")
+        self.assertEqual(cached.csv_input_path, "input-a.csv")
 
         refreshed = settings_module.get_config("custom.json", refresh=True)
         self.assertEqual(refreshed.xlsx_input_path, "input-b.xlsx")
+        self.assertEqual(refreshed.csv_input_path, "input-b.csv")
         self.assertEqual(refreshed.end_value, 40000)
+
+    def test_update_config_writes_all_optional_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.json"
+            self._write_config_file(
+                config_path,
+                self._make_config_payload("input-a.xlsx", "Sheet1", "input-a.csv", "output-a/", "xlsx", 30420),
+            )
+
+            with patch("src.config.settings.get_path", return_value=config_path):
+                updated = settings_module.update_config(
+                    "custom.json",
+                    xlsx_input_path="input-b.xlsx",
+                    xlsx_input_sheet_name="Sheet2",
+                    csv_input_path="input-b.csv",
+                    csv_output_path="output-b/",
+                    source_last_type="csv",
+                )
+
+            payload = json.loads(config_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["xlsx"]["input_path"], "input-b.xlsx")
+            self.assertEqual(payload["xlsx"]["input_sheet_name"], "Sheet2")
+            self.assertEqual(payload["csv"]["input_path"], "input-b.csv")
+            self.assertEqual(payload["csv"]["output_path"], "output-b/")
+            self.assertEqual(payload["source"]["last_type"], "csv")
+            self.assertEqual(updated.source_last_type, "csv")
 
     def test_get_config_raises_when_file_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
