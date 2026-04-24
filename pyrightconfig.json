@@ -1,6 +1,7 @@
 {
   "include": ["src"],
-  "exclude": ["output", "**/output", "**/node_modules", "**/__pycache__", ".venv", "**/.*"],
+  "exclude": ["output", "**/output", "**/node_modules", "**/__pycache__", ".venv", "**/.*", "src/views/ui/**"],
+  "ignore": ["src/views/ui/**"],
   "venvPath": ".",
   "venv": ".venv",
   "stubPath": "typings",
