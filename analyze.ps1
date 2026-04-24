@@ -59,8 +59,10 @@ function Invoke-ProjectAnalysis {
     Write-SectionTitle "sourcery review ./"
     & .venv\Scripts\sourcery.exe review ./ 2>&1
 
-    Write-SectionTitle "coverage run --source=src -m unittest discover -s tests -p "test_*.py""
+    $env:QT_QPA_PLATFORM = "offscreen"
+    Write-SectionTitle "coverage run --source=src -m unittest discover -s tests -p ""test_*.py"""
     & python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py" 2>&1
+    Remove-Item env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue
 
     Write-SectionTitle "coverage report -m --fail-under=100"
     & python -m coverage report -m --fail-under=100
