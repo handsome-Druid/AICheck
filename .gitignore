@@ -17,3 +17,4 @@ analyze.txt
 .coverage
 nuitka-crash-report.xml
 src/views/ui/main_window_ui.py
+sonar-token.txt
