@@ -41,11 +41,23 @@ class TestGetPath(unittest.TestCase):
         expected = Path(__file__).resolve().parents[1] / "folder" / "file.txt"
         self.assertEqual(get_path_module.get_path(Path("folder/file.txt")), expected)
 
+    def test_get_path_rejects_absolute_and_traversal_paths(self) -> None:
+        with self.assertRaises(ValueError):
+            get_path_module.get_path(Path("..") / "secrets.txt")
+
+        with self.assertRaises(ValueError):
+            get_path_module.get_path(Path(tempfile.gettempdir()) / "secrets.txt")
+
     def test_get_path_compiled_branch_uses_sys_argv(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             fake_exe = Path(temp_dir) / "app.exe"
             with patch.dict(get_path_module.__dict__, {"__compiled__": True}, clear=False), patch.object(sys, "argv", [str(fake_exe)]):
                 self.assertEqual(get_path_module.get_path("data.txt"), fake_exe.resolve().parent / "data.txt")
+
+    def test_get_path_allows_absolute_when_opted_in(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            absolute = Path(temp_dir) / "output.csv"
+            self.assertEqual(get_path_module.get_path(absolute, allow_absolute=True), absolute.resolve())
 
 
 class TestSettings(unittest.TestCase):
@@ -153,6 +165,13 @@ class TestSettings(unittest.TestCase):
 
         self.assertIn("missing-settings.json", str(context.exception))
 
+    def test_get_config_rejects_path_like_names(self) -> None:
+        with self.assertRaises(ValueError):
+            settings_module.get_config("../secrets.json", refresh=True)
+
+        with self.assertRaises(ValueError):
+            settings_module.update_config("nested/settings.json")
+
 
 class TestWriteCsv(unittest.TestCase):
     def setUp(self) -> None:
@@ -199,6 +218,17 @@ class TestWriteCsv(unittest.TestCase):
             with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 self.assertEqual(list(csv.reader(handle)), [["value"], ["first"], ["second"]])
 
+    def test_write_csv_accepts_absolute_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = Path(temp_dir) / "absolute.csv"
+            rows: Iterator[Sequence[str | float]] = iter([("x", 1.0)])
+
+            written = write_csv_module.write_csv(rows, output_path)
+
+            with output_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                self.assertEqual(list(csv.reader(handle)), [["x", "1.0"]])
+            self.assertEqual(written, 1)
+
 
 class TestPrintHelpers(unittest.TestCase):
     def test_test_print_from_list_formats_float_and_list(self) -> None:
@@ -213,10 +243,9 @@ class TestPrintHelpers(unittest.TestCase):
         with patch("sys.stdout", stdout):
             test_print_module.test_print_from_list(rows)
 
-        output = stdout.getvalue()
-        self.assertIn("1.2346", output)
-        self.assertIn("['a', 'b']", output)
-        self.assertIn("['c']", output)
+        self._extracted_from_test_test_print_from_dataclass_handles_single_field_dataclass_13(
+            stdout, "1.2346", "['a', 'b']", "['c']"
+        )
 
     def test_test_print_from_dataclass_formats_rows(self) -> None:
         stdout = io.StringIO()
@@ -232,10 +261,9 @@ class TestPrintHelpers(unittest.TestCase):
         with patch("sys.stdout", stdout):
             test_print_module.test_print_from_dataclass(rows)
 
-        output = stdout.getvalue()
-        self.assertIn("name", output)
-        self.assertIn("3.1416", output)
-        self.assertIn("['x', 'y']", output)
+        self._extracted_from_test_test_print_from_dataclass_handles_single_field_dataclass_13(
+            stdout, "name", "3.1416", "['x', 'y']"
+        )
 
     def test_test_print_from_dataclass_handles_single_field_dataclass(self) -> None:
         stdout = io.StringIO()
@@ -249,7 +277,12 @@ class TestPrintHelpers(unittest.TestCase):
         with patch("sys.stdout", stdout):
             test_print_module.test_print_from_dataclass(rows)
 
+        self._extracted_from_test_test_print_from_dataclass_handles_single_field_dataclass_13(
+            stdout, "value", "alpha", "beta"
+        )
+
+    def _extracted_from_test_test_print_from_dataclass_handles_single_field_dataclass_13(self, stdout: io.StringIO, arg1: str, arg2: str, arg3: str) -> None:
         output = stdout.getvalue()
-        self.assertIn("value", output)
-        self.assertIn("alpha", output)
-        self.assertIn("beta", output)
+        self.assertIn(arg1, output)
+        self.assertIn(arg2, output)
+        self.assertIn(arg3, output)

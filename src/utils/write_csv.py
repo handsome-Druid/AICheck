@@ -17,7 +17,7 @@ except ImportError:
 
 
 def write_csv(results: Iterator[Iterable[str | float]], _path: str | Path) -> int:
-    _path = get_path(_path)
+    _path = get_path(_path, allow_absolute=True)
     os.makedirs(
         Path(_path).resolve().parent, 
         exist_ok=True
@@ -37,7 +37,7 @@ def write_csv(results: Iterator[Iterable[str | float]], _path: str | Path) -> in
 
 
 def write_csv_from_dataclass(results: Iterator[T_Dataclass], _path: str | Path) -> int:
-    _path = get_path(_path)
+    _path = get_path(_path, allow_absolute=True)
     os.makedirs(
         Path(_path).resolve().parent, 
         exist_ok=True

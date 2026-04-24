@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, field, fields
+from pathlib import Path
 from typing import ClassVar, Callable, Self
 try:
     from src.utils.get_path import get_path
@@ -57,17 +58,28 @@ class JsonConfig:
 
 
 json_config: dict[str, JsonConfig] = {}
+
+
+def _normalize_config_name(config_name: str) -> str:
+    candidate = Path(config_name)
+    if candidate.is_absolute() or candidate.name != config_name or any(part == ".." for part in candidate.parts):
+        raise ValueError(f"Invalid configuration file name: {config_name}")
+
+    return candidate.name
+
+
 def get_config(_json: str = "settings.json", refresh: bool = False) -> JsonConfig:
     global json_config
-    if _json not in json_config or refresh:
+    config_name = _normalize_config_name(_json)
+    if config_name not in json_config or refresh:
         try:
-            json_config[_json] = JsonConfig.from_json(
-                get_path(_json)
+            json_config[config_name] = JsonConfig.from_json(
+                get_path(config_name)
                 .read_text(encoding="utf-8")
             )
         except FileNotFoundError as e:
-            raise FileNotFoundError(f"Configuration file '{_json}' not found.") from e
-    return json_config[_json]
+            raise FileNotFoundError(f"Configuration file '{config_name}' not found.") from e
+    return json_config[config_name]
 
 
 def update_config(
@@ -79,7 +91,8 @@ def update_config(
     csv_output_path: str | None = None,
     source_last_type: str | None = None,
 ) -> JsonConfig:
-    config_path = get_path(_json)
+    config_name = _normalize_config_name(_json)
+    config_path = get_path(config_name)
     data = json.loads(config_path.read_text(encoding="utf-8"))
 
     if xlsx_input_path is not None:
@@ -98,8 +111,8 @@ def update_config(
         data.setdefault("source", {})["last_type"] = source_last_type
 
     config_path.write_text(json.dumps(data, ensure_ascii=False, indent=4), encoding="utf-8")
-    json_config.pop(_json, None)
-    return get_config(_json, refresh=True)
+    json_config.pop(config_name, None)
+    return get_config(config_name, refresh=True)
 
 def main() -> None:
         config = get_config()
