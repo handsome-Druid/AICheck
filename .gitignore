@@ -3,7 +3,6 @@ __pycache__/
 *.py[cod]
 .vscode/
 .sonarlint/
-.sonar-token.txt
 
 output/
 .pytest_cache/
