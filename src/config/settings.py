@@ -18,9 +18,7 @@ class JsonConfig:
     source_last_type: str = field(metadata={"path": ("source", "last_type")})
     end_tag: str = field(metadata={"path": ("end_flag", "tag")})
     end_value: str = field(metadata={"path": ("end_flag", "value")})
-    pass_tag: list[str] = field(metadata={"path": ("pass_flag", "tag")})
-    pass_value: list[object] = field(metadata={"path": ("pass_flag", "value")})
-
+    pass_port: list[int] = field(metadata={"path": ("pass_port",), "type": list[int]})
 
     _cache: ClassVar[dict[type, Callable[[dict[str, object]], Self]]] = {}
 

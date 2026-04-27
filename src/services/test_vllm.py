@@ -1,17 +1,23 @@
-import httpx
+from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 import time
 
 from src.models.vllm_results import VLLMTestResult
 
+if TYPE_CHECKING:
+    import httpx
+
 async def check_vllm_models(
-        client: httpx.AsyncClient,
+        client: "httpx.AsyncClient",
         url: str, 
         port: int, 
         container_name: str,
         expected_models: list[str], 
-        api_key: str | None = None,
+        model_id: str,
+        api_key: str | None = None
         ) -> VLLMTestResult:
+
+    import httpx
 
     url = url.replace("chat/completions","models")
     ip = urlparse(url).hostname or ""
@@ -28,7 +34,8 @@ async def check_vllm_models(
         extra_model: list[str],
         missing_model: list[str],
         response_time: float,
-        container_name: str
+        container_name: str,
+        model_id: str
     ) -> VLLMTestResult:
         return VLLMTestResult(
             ip=ip,
@@ -40,7 +47,8 @@ async def check_vllm_models(
             extra_model=extra_model,
             missing_model=missing_model,
             response_time=response_time,
-            container_name=container_name
+            container_name=container_name,
+            model_id=model_id
         )
     
     try:
@@ -57,7 +65,8 @@ async def check_vllm_models(
                 extra_model=[],
                 missing_model=[],
                 response_time=response_time,
-                container_name=container_name
+                container_name=container_name,
+                model_id=model_id
             )
         
         try:
@@ -70,7 +79,8 @@ async def check_vllm_models(
                     extra_model=[],
                     missing_model=[],
                     response_time=response_time,
-                    container_name=container_name
+                    container_name=container_name,
+                    model_id=model_id
                 )
 
             available_models = [model["id"] for model in data["data"]]
@@ -86,7 +96,8 @@ async def check_vllm_models(
                         extra_model=[],
                         missing_model=[],
                         response_time=response_time,
-                        container_name=container_name
+                        container_name=container_name,
+                        model_id=model_id
                     )
                 case (_, []):
                     return build_result(
@@ -96,7 +107,8 @@ async def check_vllm_models(
                         extra_model=[],
                         missing_model=missing,
                         response_time=response_time,
-                        container_name=container_name
+                        container_name=container_name,
+                        model_id=model_id
                     )
                 case ([], _):
                     return build_result(
@@ -106,7 +118,8 @@ async def check_vllm_models(
                         extra_model=extra,
                         missing_model=[],
                         response_time=response_time,
-                        container_name=container_name
+                        container_name=container_name,
+                        model_id=model_id
                     )
                 case _:
                     return build_result(
@@ -116,7 +129,8 @@ async def check_vllm_models(
                         extra_model=extra,
                         missing_model=missing,
                         response_time=response_time,
-                        container_name=container_name
+                        container_name=container_name,
+                        model_id=model_id
                     )
 
         except ValueError:
@@ -127,7 +141,8 @@ async def check_vllm_models(
                 extra_model=[],
                 missing_model=[],
                 response_time=response_time,
-                container_name=container_name
+                container_name=container_name,
+                model_id=model_id
             )
     except httpx.TimeoutException:
         return build_result(
@@ -137,7 +152,8 @@ async def check_vllm_models(
             extra_model=[],
             missing_model=[],
             response_time=10.0,
-            container_name=container_name
+            container_name=container_name,
+            model_id=model_id
         )
     except httpx.RequestError:
         return build_result(
@@ -147,7 +163,8 @@ async def check_vllm_models(
             extra_model=[],
             missing_model=[],
             response_time=0.0,
-            container_name=container_name
+            container_name=container_name,
+            model_id=model_id
         )
     except Exception as e:
         return build_result(
@@ -157,5 +174,6 @@ async def check_vllm_models(
             extra_model=[],
             missing_model=[],
             response_time=0.0,
-            container_name=container_name
+            container_name=container_name,
+            model_id=model_id
         )

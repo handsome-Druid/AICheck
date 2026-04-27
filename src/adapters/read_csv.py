@@ -13,9 +13,9 @@ except ImportError:
 	from src.models.type import CellGetValue
 
 
-def read_csv(path: str | PathLike[str]) -> Iterator[CellGetValue]:
+def read_csv(path: str | PathLike[str], encoding: str = "utf-8-sig") -> Iterator[CellGetValue]:
 	try:
-		with open(path, mode="r", encoding="utf-8-sig", newline="") as csv_file:
+		with open(path, mode="r", encoding=encoding, newline="", errors="replace") as csv_file:
 			yield from cast(Iterator[CellGetValue], csv_reader(csv_file))
 	except FileNotFoundError as e:
 		raise FileNotFoundError(f"CSV file '{path}' not found.") from e

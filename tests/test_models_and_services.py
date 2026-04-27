@@ -3,16 +3,18 @@ from __future__ import annotations
 import unittest
 import importlib
 import tempfile
+from datetime import datetime as real_datetime, tzinfo
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Iterator, NoReturn, cast
+from typing import Iterator, NoReturn, cast, Optional
 from unittest.mock import AsyncMock, patch
 
 import httpx
 
 read_xlsx_module = importlib.import_module("src.adapters.read_xlsx")
 read_csv_module = importlib.import_module("src.adapters.read_csv")
+read_history_results_module = importlib.import_module("src.adapters.read_history_results")
 from src.models import sheet as sheet_module
 from src.models.type import CellGetValue
 from src.models.vllm_results import VLLMTestResult
@@ -132,7 +134,7 @@ class TestSheetAndAdapter(unittest.TestCase):
         def fake_fields(cls: type[object]) -> list[SimpleNamespace]:
             return fake_field_specs if cls is sheet_module.Sheet else []
 
-        with patch.object(sheet_module, "fields", side_effect=fake_fields):
+        with patch("src.models.base.fields", side_effect=fake_fields):
             results = list(sheet_module.Sheet.from_reader(iter([header, row])))
 
         self.assertTrue(results[0].gpu_count)
@@ -165,7 +167,7 @@ class TestSheetAndAdapter(unittest.TestCase):
             SimpleNamespace(name="ignored", metadata={}),
         ]
 
-        with patch.object(sheet_module, "fields", return_value=fake_field_specs):
+        with patch("src.models.base.fields", return_value=fake_field_specs):
             results = list(sheet_module.Sheet.from_reader(iter([header, row])))
 
         self.assertEqual(results[0].context_length, 12.5)
@@ -287,6 +289,17 @@ class TestSheetAndAdapter(unittest.TestCase):
 
         self.assertIn("missing.csv", str(context.exception))
 
+    def test_read_csv_supports_custom_encoding_and_error_replace(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            csv_path = Path(temp_dir) / "rows_gbk.csv"
+            csv_path.write_bytes("a,b\n1,2\n坏,3\n".encode("gbk"))
+
+            rows = list(read_csv_module.read_csv(csv_path, encoding="utf-8"))
+
+        self.assertEqual(rows[0], ["a", "b"])
+        self.assertEqual(rows[1], ["1", "2"])
+        self.assertEqual(rows[2][1], "3")
+
     def test_read_xlsx_yields_rows(self) -> None:
         fake_sheet = FakeSheet([[1, 2], [3, 4]])
         fake_workbook = FakeWorkbook(fake_sheet)
@@ -316,6 +329,38 @@ class TestSheetAndAdapter(unittest.TestCase):
 
         self.assertIn("missing.xlsx", str(context.exception))
 
+    def test_filter_log_files_uses_friday_afternoon_window_on_monday(self) -> None:
+        class FixedMondayDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz: Optional[tzinfo] =None):
+                return cls(2026, 4, 27, 10, 0, 0, tzinfo=tz)
+
+        filenames = [
+            "vllm_test_results_20260424_130000.csv",  # Friday afternoon
+            "vllm_test_results_20260426_150000.csv",  # Sunday afternoon
+            "vllm_test_results_20260427_090000.csv",  # Monday morning
+            "vllm_test_results_20260427_130000.csv",  # Monday afternoon
+            "vllm_test_results_20260424_110000.csv",  # Friday before noon
+        ]
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            for name in filenames:
+                (output_dir / name).write_text("", encoding="utf-8")
+
+            with patch.object(read_history_results_module, "datetime", FixedMondayDatetime):
+                previous_after_noon, today_morning, today_after_noon = read_history_results_module.filter_log_files(output_dir)
+
+        self.assertCountEqual(
+            previous_after_noon,
+            [
+                "vllm_test_results_20260424_130000.csv",
+                "vllm_test_results_20260426_150000.csv",
+            ],
+        )
+        self.assertEqual(today_morning, ["vllm_test_results_20260427_090000.csv"])
+        self.assertEqual(today_after_noon, ["vllm_test_results_20260427_130000.csv"])
+
 
 class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
     async def _run_case(
@@ -342,6 +387,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 port=8000,
                 container_name="test_c",
                 expected_models=case.expected_models,
+                model_id="m-under-test",
                 api_key=case.api_key,
             )
 
@@ -408,6 +454,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 port=8000,
                 container_name="test_c",
                 expected_models=["m1"],
+                model_id="m1",
             )
         self.assertEqual(timeout_result.status, "timeout")
         self.assertEqual(timeout_result.response_time, 10.0)
@@ -421,6 +468,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 port=8000,
                 container_name="test_c",
                 expected_models=["m1"],
+                model_id="m1",
             )
         self.assertEqual(request_result.status, "failed")
         self.assertIn("连接失败", request_result.message)
@@ -434,6 +482,8 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
                 port=8000,
                 container_name="test_c",
                 expected_models=["m1"],
+                model_id="m1",
             )
         self.assertEqual(unknown_result.status, "failed")
         self.assertIn("发生未知错误", unknown_result.message)
+        self.assertEqual(unknown_result.model_id, "m1")

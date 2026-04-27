@@ -5,15 +5,16 @@ from collections.abc import AsyncIterator, Iterator
 from itertools import islice
 from pathlib import Path
 from queue import Queue
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-import httpx
+if TYPE_CHECKING:
+    import httpx
 
 from src.config import get_config
 from src.models.sheet import Sheet, get_sheet_iterator
 from src.models.vllm_results import VLLMTestResult
 from src.services.test_vllm import check_vllm_models
-from src.utils.test_print import test_print_from_dataclass
+from src.utils.print_results import print_results
 from src.utils.write_csv import write_csv_from_dataclass
 
 
@@ -43,13 +44,13 @@ def iter_filtered_sheets() -> Iterator[Sheet]:
             break
 
         if all(
-            getattr(sheet, p_tag, None) != p_val
-            for p_tag, p_val in zip(config.pass_tag, config.pass_value)
+            getattr(sheet, "port", None) != port
+            for port in config.pass_port
         ):
             yield sheet
 
 
-async def iter_results(client: httpx.AsyncClient) -> AsyncIterator[VLLMTestResult]:
+async def iter_results(client: "httpx.AsyncClient") -> AsyncIterator[VLLMTestResult]:
     for batch in iter_batches(iter_filtered_sheets(), MAX_CONCURRENT_REQUESTS):
         batch_results = await asyncio.gather(
             *(
@@ -59,7 +60,8 @@ async def iter_results(client: httpx.AsyncClient) -> AsyncIterator[VLLMTestResul
                     port=sheet.port,
                     expected_models=[sheet.model_id],
                     api_key=None,
-                    container_name=sheet.container_name
+                    container_name=sheet.container_name,
+                    model_id=sheet.model_id
                 )
                 for sheet in batch
             )
@@ -84,8 +86,10 @@ async def run() -> None:
     print_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
     csv_queue: Queue[object] = Queue(maxsize=MAX_CONCURRENT_REQUESTS)
 
-    print_task = asyncio.create_task(asyncio.to_thread(test_print_from_dataclass, iter_queue_results(print_queue)))
+    print_task = asyncio.create_task(asyncio.to_thread(print_results, iter_queue_results(print_queue)))
     csv_task = asyncio.create_task(asyncio.to_thread(write_csv_from_dataclass, iter_queue_results(csv_queue), csv_path))
+
+    import httpx
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
         async for result in iter_results(client):

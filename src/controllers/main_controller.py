@@ -11,6 +11,14 @@ from PySide6.QtCore import QObject, QThread, Signal
 from src.config.settings import update_config
 from src.controllers.vllm_test_controller import run
 from src.models.type import MainWindowLike, WorkerLike
+from src.services.check_history_results import check_current
+
+
+HISTORY_PERIOD_LABELS = (
+	"上一个工作日下午",
+	"今天上午",
+	"今天下午",
+)
 
 
 class SignalStream(io.TextIOBase):
@@ -54,6 +62,7 @@ class MainController(QObject):
 		self.window.sheetNameChanged.connect(self.on_sheet_name_changed)
 		self.window.outputDirChanged.connect(self.on_output_dir_changed)
 		self.window.startTestRequested.connect(self.on_start_test_requested)
+		self.window.showHistoryRequested.connect(self.on_show_history_requested)
 
 	def on_data_source_changed(self, data_source_path: str, source_type: str) -> None:
 		if source_type == "csv":
@@ -92,6 +101,20 @@ class MainController(QObject):
 		self.worker.message.connect(self.window.append_std_info)
 		self.worker.finishedWithStatus.connect(self.on_worker_finished)
 		self.worker.start()
+
+	def on_show_history_requested(self) -> None:
+		try:
+			results = check_current()
+		except Exception as exc:  # noqa: BLE001
+			self.window.append_std_info(f"加载历史结果失败: {exc}")
+			return
+
+		rows: list[tuple[str, int, str]] = []
+		for period_label, result_dict in zip(HISTORY_PERIOD_LABELS, results):
+			rows.extend((period_label, port, error_message) for port, error_message in sorted(result_dict.items()))
+
+		self.window.show_history_results(rows)
+		self.window.append_std_info(f"已加载历史测试结果，共 {len(rows)} 条。")
 
 	def on_worker_finished(self, success: bool, message: str) -> None:
 		self.window.setEnabled(True)

@@ -54,9 +54,11 @@ class FakeLineEdit:
     def __init__(self, text: str = "", enabled: bool = True) -> None:
         self._text = text
         self._enabled = enabled
+        self.cursor_position = 0
         self.text_changed = Signal1[str]()
         setattr(self, "textChanged", self.text_changed)
         setattr(self, "setText", self.set_text)
+        setattr(self, "setCursorPosition", self.set_cursor_position)
         setattr(self, "setEnabled", self.set_enabled)
         setattr(self, "isEnabled", self.is_enabled)
 
@@ -65,6 +67,9 @@ class FakeLineEdit:
 
     def text(self) -> str:
         return self._text
+
+    def set_cursor_position(self, position: int) -> None:
+        self.cursor_position = position
 
     def set_enabled(self, enabled: bool) -> None:
         self._enabled = enabled
@@ -82,6 +87,57 @@ class FakePlainTextEdit:
         self.lines.append(text)
 
 
+class FakeHeader:
+    def __init__(self) -> None:
+        self.resize_modes: dict[int, object] = {}
+        self.minimum_section_size: int | None = None
+        self.visible = True
+        setattr(self, "setSectionResizeMode", self.set_section_resize_mode)
+        setattr(self, "setMinimumSectionSize", self.set_minimum_section_size)
+        setattr(self, "setVisible", self.set_visible)
+
+    def set_section_resize_mode(self, index: int, mode: object) -> None:
+        self.resize_modes[index] = mode
+
+    def set_minimum_section_size(self, size: int) -> None:
+        self.minimum_section_size = size
+
+    def set_visible(self, visible: bool) -> None:
+        self.visible = visible
+
+
+class FakeTableWidget:
+    def __init__(self) -> None:
+        self.contents: dict[tuple[int, int], str] = {}
+        self.row_count = 0
+        self.horizontal_header_ = FakeHeader()
+        self.vertical_header_ = FakeHeader()
+        setattr(self, "horizontalHeader", self.horizontal_header)
+        setattr(self, "verticalHeader", self.vertical_header)
+        setattr(self, "clearContents", self.clear_contents)
+        setattr(self, "setRowCount", self.set_row_count)
+        setattr(self, "setItem", self.set_item)
+
+    def horizontal_header(self) -> FakeHeader:
+        return self.horizontal_header_
+
+    def vertical_header(self) -> FakeHeader:
+        return self.vertical_header_
+
+    def clear_contents(self) -> None:
+        self.contents = {}
+
+    def set_row_count(self, row_count: int) -> None:
+        self.row_count = row_count
+
+    def set_item(self, row: int, col: int, item: object) -> None:
+        text_getter = getattr(item, "text", None)
+        if callable(text_getter):
+            self.contents[(row, col)] = str(text_getter())
+        else:
+            self.contents[(row, col)] = str(item)
+
+
 class FakeButton:
     def __init__(self) -> None:
         self.clicked = Signal0()
@@ -96,8 +152,10 @@ class FakeUiMainWindow:
         setattr(self, "lineEditSheetName", FakeLineEdit())
         setattr(self, "lineEditOutputDirPath", FakeLineEdit())
         setattr(self, "plainTextEditStdInfo", FakePlainTextEdit())
+        setattr(self, "tableWidgetHistoryResults", FakeTableWidget())
         setattr(self, "pushButtonBrowseDataSource", FakeButton())
         setattr(self, "pushButtonBrowseOutputDir", FakeButton())
+        setattr(self, "pushButtonShowHistoryResults", FakeButton())
         setattr(self, "pushButtonStartTest", FakeButton())
 
 
@@ -107,20 +165,26 @@ class FakeWindow:
         self.sheet_name_changed = Signal1[str]()
         self.output_dir_changed = Signal1[str]()
         self.start_test_requested = Signal2[str, str]()
+        self.show_history_requested = Signal0()
         setattr(self, "dataSourceChanged", self.data_source_changed)
         setattr(self, "sheetNameChanged", self.sheet_name_changed)
         setattr(self, "outputDirChanged", self.output_dir_changed)
         setattr(self, "startTestRequested", self.start_test_requested)
+        setattr(self, "showHistoryRequested", self.show_history_requested)
         setattr(self, "setEnabled", self.set_enabled)
         self.ui = SimpleNamespace(lineEditSheetName=FakeLineEdit(enabled=sheet_enabled))
         self.messages: list[str] = []
         self.enabled_states: list[bool] = []
+        self.history_rows: list[tuple[str, int, str]] = []
 
     def append_std_info(self, text: str) -> None:
         self.messages.append(text)
 
     def set_enabled(self, enabled: bool) -> None:
         self.enabled_states.append(enabled)
+
+    def show_history_results(self, rows: list[tuple[str, int, str]]) -> None:
+        self.history_rows = rows
 
 
 class FakeThread:
@@ -179,6 +243,12 @@ class TestMainWindow(unittest.TestCase):
         self.assertEqual(window.ui.lineEditOutputDirPath.text(), "output/")
         self.assertEqual(window.ui.lineEditSheetName.text(), "Sheet1")
         self.assertFalse(window.ui.lineEditSheetName.isEnabled())
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditDataSourcePath).cursor_position, 0)
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditSheetName).cursor_position, 0)
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditOutputDirPath).cursor_position, 0)
+        table = cast(FakeTableWidget, window.ui.tableWidgetHistoryResults)
+        self.assertEqual(table.horizontal_header_.minimum_section_size, 110)
+        self.assertFalse(table.vertical_header_.visible)
         plain_text = cast(FakePlainTextEdit, window.ui.plainTextEditStdInfo)
         self.assertIn("已读取当前设置。", plain_text.lines)
 
@@ -211,9 +281,12 @@ class TestMainWindow(unittest.TestCase):
         window.sheetNameChanged.connect(on_sheet_name)
         window.outputDirChanged.connect(on_output_dir)
         window.startTestRequested.connect(on_start)
+        history_requested: list[bool] = []
+        window.showHistoryRequested.connect(lambda: history_requested.append(True))
         plain_text = cast(FakePlainTextEdit, window.ui.plainTextEditStdInfo)
         browse_data_button = cast(FakeButton, window.ui.pushButtonBrowseDataSource)
         browse_output_button = cast(FakeButton, window.ui.pushButtonBrowseOutputDir)
+        browse_history_button = cast(FakeButton, window.ui.pushButtonShowHistoryResults)
         start_button = cast(FakeButton, window.ui.pushButtonStartTest)
         line_edit = cast(FakeLineEdit, window.ui.lineEditSheetName)
 
@@ -221,6 +294,7 @@ class TestMainWindow(unittest.TestCase):
             browse_data_button.clicked.emit()
 
         self.assertEqual(data_sources[-1], ("C:/tmp/data.csv", "csv"))
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditDataSourcePath).cursor_position, 0)
         self.assertFalse(window.ui.lineEditSheetName.isEnabled())
 
         line_edit.text_changed.emit("ignored")
@@ -230,12 +304,24 @@ class TestMainWindow(unittest.TestCase):
             browse_data_button.clicked.emit()
 
         self.assertEqual(data_sources[-1], ("C:/tmp/data.xlsx", "xlsx"))
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditDataSourcePath).cursor_position, 0)
         self.assertTrue(window.ui.lineEditSheetName.isEnabled())
 
         with patch.object(main_view_module.QFileDialog, "getExistingDirectory", return_value="C:/out"):
             browse_output_button.clicked.emit()
 
         self.assertEqual(outputs[-1], "C:/out")
+        self.assertEqual(cast(FakeLineEdit, window.ui.lineEditOutputDirPath).cursor_position, 0)
+
+        browse_history_button.clicked.emit()
+        self.assertEqual(history_requested, [True])
+
+        window.show_history_results([("今天上午", 8000, "failed")])
+        table = cast(FakeTableWidget, window.ui.tableWidgetHistoryResults)
+        self.assertEqual(table.row_count, 1)
+        self.assertEqual(table.contents[(0, 0)], "今天上午")
+        self.assertEqual(table.contents[(0, 1)], "8000")
+        self.assertEqual(table.contents[(0, 2)], "failed")
 
         window.ui.lineEditDataSourcePath.setText("")
         window.ui.lineEditOutputDirPath.setText("C:/out")
@@ -427,6 +513,38 @@ class TestMainController(unittest.TestCase):
 
         self.assertIn(True, window.enabled_states)
         self.assertIn("测试结束: boom", window.messages)
+
+    def test_controller_show_history_success(self) -> None:
+        window = FakeWindow(sheet_enabled=True)
+        controller = controller_module.MainController(window)
+
+        history: tuple[dict[int, str], dict[int, str], dict[int, str]] = (
+            {8002: "e2", 8001: "e1"},
+            {},
+            {9000: "e9"},
+        )
+
+        with patch.object(controller_module, "check_current", return_value=history):
+            controller.on_show_history_requested()
+
+        self.assertEqual(
+            window.history_rows,
+            [
+                ("上一个工作日下午", 8001, "e1"),
+                ("上一个工作日下午", 8002, "e2"),
+                ("今天下午", 9000, "e9"),
+            ],
+        )
+        self.assertIn("已加载历史测试结果，共 3 条。", window.messages)
+
+    def test_controller_show_history_failure(self) -> None:
+        window = FakeWindow(sheet_enabled=True)
+        controller = controller_module.MainController(window)
+
+        with patch.object(controller_module, "check_current", side_effect=RuntimeError("bad-history")):
+            controller.on_show_history_requested()
+
+        self.assertIn("加载历史结果失败: bad-history", window.messages)
 
     def test_signal_stream_and_test_run_thread(self) -> None:
         captured: list[str] = []

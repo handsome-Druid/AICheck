@@ -37,9 +37,12 @@ class MainWindowLike(Protocol):  # pragma: no cover
     sheetNameChanged: SignalLike1[str]
     outputDirChanged: SignalLike1[str]
     startTestRequested: SignalLike2[str, str]
+    showHistoryRequested: SignalLike0
     ui: MainWindowUiLike
 
     def append_std_info(self, text: str) -> None: ...
+
+    def show_history_results(self, rows: list[tuple[str, int, str]]) -> None: ...
 
     def setEnabled(self, enabled: bool) -> None: ...
 

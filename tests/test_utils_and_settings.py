@@ -79,7 +79,7 @@ class TestSettings(unittest.TestCase):
                 "csv": {"input_path": csv_input_path, "output_path": csv_output_path},
                 "source": {"last_type": source_last_type},
                 "end_flag": {"tag": "port", "value": end_value},
-                "pass_flag": {"tag": ["port"], "value": [30421]},
+                "pass_port": [30421],
             }
         )
 
@@ -98,8 +98,7 @@ class TestSettings(unittest.TestCase):
         self.assertEqual(config.source_last_type, "xlsx")
         self.assertEqual(config.end_tag, "port")
         self.assertEqual(config.end_value, 30420)
-        self.assertEqual(config.pass_tag, ["port"])
-        self.assertEqual(config.pass_value, [30421])
+        self.assertEqual(config.pass_port, [30421])
 
     def test_get_config_caches_and_refreshes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
