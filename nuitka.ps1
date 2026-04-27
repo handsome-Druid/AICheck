@@ -2,7 +2,7 @@ $python = ".\.venv\Scripts\python.exe"
 
 & $python -m nuitka `
 	--onefile `
-	--windows-console-mode=force `
+	--windows-console-mode=disable `
 	--output-dir=output/nuitka `
     --jobs=12 `
 	--enable-plugin=pyside6 `
