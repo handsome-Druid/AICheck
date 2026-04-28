@@ -3,12 +3,13 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import random
+import http.server as http_server
 import time
 from collections.abc import Mapping, Sequence
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from http.server import BaseHTTPRequestHandler
 from pathlib import Path, PurePosixPath
-from typing import ClassVar, TypedDict, cast
+from random import SystemRandom
+from typing import ClassVar, Protocol, TypedDict, cast
 from urllib.parse import urlsplit
 
 
@@ -39,6 +40,7 @@ CASE_KINDS: list[str] = [
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 18080
+DEFAULT_SCHEME = "https"
 JSON_CONTENT_TYPE = "application/json; charset=utf-8"
 TEXT_CONTENT_TYPE = "text/plain; charset=utf-8"
 
@@ -82,7 +84,25 @@ class SettingsPayload(TypedDict):
     pass_port: list[int]
 
 
-def _unique_models(rng: random.Random, prefix: str, count: int, excluded: Sequence[str]) -> list[str]:
+class _ServeForever(Protocol):
+    def serve_forever(self) -> None: ...
+
+
+class _HTTPSServerFactory(Protocol):
+    def __call__(
+        self,
+        server_address: tuple[str, int],
+        RequestHandlerClass: type[BaseHTTPRequestHandler],
+        bind_and_activate: bool = True,
+        *,
+        certfile: str | Path,
+        keyfile: str | Path | None = None,
+        password: str | None = None,
+        alpn_protocols: list[str] | None = None,
+    ) -> _ServeForever: ...
+
+
+def _unique_models(rng: SystemRandom, prefix: str, count: int, excluded: Sequence[str]) -> list[str]:
     models: list[str] = []
     excluded_set = set(excluded)
 
@@ -95,13 +115,13 @@ def _unique_models(rng: random.Random, prefix: str, count: int, excluded: Sequen
     return models
 
 
-def _build_models_with_expected(rng: random.Random, expected_model: str, extra_count: int) -> list[str]:
+def _build_models_with_expected(rng: SystemRandom, expected_model: str, extra_count: int) -> list[str]:
     models = [expected_model, *_unique_models(rng, "extra", extra_count, [expected_model])]
     rng.shuffle(models)
     return models
 
 
-def _case_sequence(row_count: int, rng: random.Random) -> list[str]:
+def _case_sequence(row_count: int, rng: SystemRandom) -> list[str]:
     cases = CASE_KINDS[:]
     while len(cases) < row_count:
         cases.append(rng.choice(CASE_KINDS))
@@ -109,7 +129,7 @@ def _case_sequence(row_count: int, rng: random.Random) -> list[str]:
     return cases[:row_count]
 
 
-def _build_case_payload(case_kind: str, expected_model: str, rng: random.Random) -> CasePayload:
+def _build_case_payload(case_kind: str, expected_model: str, rng: SystemRandom) -> CasePayload:
     if case_kind == "exact_single":
         return {"status_code": 200, "kind": "json", "models": [expected_model], "delay_seconds": 0.0}
 
@@ -231,8 +251,8 @@ def _load_manifest(manifest_path: Path) -> ManifestMap:
     return manifest
 
 
-def generate_fixtures(output_dir: Path, row_count: int, seed: int) -> Path:
-    rng = random.Random(seed)
+def generate_fixtures(output_dir: Path, row_count: int) -> Path:
+    rng = SystemRandom()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     results_dir = output_dir / "results"
@@ -253,7 +273,7 @@ def generate_fixtures(output_dir: Path, row_count: int, seed: int) -> Path:
             case_id = f"case-{index:04d}"
             expected_model = f"model-{index:04d}"
             port = 30_000 + index
-            call_method = f"http://{DEFAULT_HOST}:{DEFAULT_PORT}/{case_id}/chat/completions"
+            call_method = f"{DEFAULT_SCHEME}://{DEFAULT_HOST}:{DEFAULT_PORT}/{case_id}/chat/completions"
             payload = _build_case_payload(case_kind, expected_model, rng)
 
             manifest[case_id] = {
@@ -290,8 +310,8 @@ def generate_fixtures(output_dir: Path, row_count: int, seed: int) -> Path:
             "last_type": "csv",
         },
         "end_flag": {
-            "tag": "__no_such_field__",
-            "value": "__stop__",
+            "tag": "",
+            "value": "",
         },
         "pass_port": [],
     }
@@ -345,11 +365,22 @@ def _build_handler(manifest: ManifestMap) -> type[BaseHTTPRequestHandler]:
     return MockVllmHandler
 
 
-def serve_manifest(manifest_path: Path, host: str, port: int) -> None:
+def serve_manifest(manifest_path: Path, host: str, port: int, cert_path: Path | None = None, key_path: Path | None = None) -> None:
     manifest = _load_manifest(manifest_path)
     handler = _build_handler(manifest)
-    server = ThreadingHTTPServer((host, port), handler)
-    print(f"Mock vLLM server listening on http://{host}:{port}")
+
+    if cert_path is None:
+        raise ValueError("cert_path is required for the HTTPS mock server")
+
+    server_cls = cast(_HTTPSServerFactory, getattr(http_server, "ThreadingHTTPSServer"))
+    server = server_cls(
+        (host, port),
+        handler,
+        certfile=str(cert_path),
+        keyfile=key_path,
+    )
+
+    print(f"Mock vLLM server listening on https://{host}:{port}")
     server.serve_forever()
 
 
@@ -366,15 +397,17 @@ def main() -> None:
     serve_parser.add_argument("--manifest", type=Path, required=True)
     serve_parser.add_argument("--host", default=DEFAULT_HOST)
     serve_parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    serve_parser.add_argument("--cert", type=Path)
+    serve_parser.add_argument("--key", type=Path)
 
     args = parser.parse_args()
 
     if args.command == "generate":
-        generate_fixtures(args.output, args.rows, args.seed)
+        generate_fixtures(args.output, args.rows)
         return
 
     if args.command == "serve":
-        serve_manifest(args.manifest, args.host, args.port)
+        serve_manifest(args.manifest, args.host, args.port, args.cert, args.key)
         return
 
     raise AssertionError("unreachable")

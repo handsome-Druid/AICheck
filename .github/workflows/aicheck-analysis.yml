@@ -8,11 +8,17 @@ on:
 permissions:
   contents: read
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analysis-step:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SOURCERY_TOKEN: ${{ secrets.SOURCERY_TOKEN }}
     strategy:
       fail-fast: false
       matrix:
@@ -22,8 +28,8 @@ jobs:
             mock_vllm: false
           - name: ui generation check
             script: |
-              uv run pyside6-uic src/views/ui/main_window.ui -o "$RUNNER_TEMP/main_window_ui.py"
-              diff -u src/views/ui/main_window_ui.py "$RUNNER_TEMP/main_window_ui.py"
+              uv run pyside6-uic src/views/ui/main_window.ui -o src/views/ui/main_window_ui.py
+              test -f src/views/ui/main_window_ui.py
             mock_vllm: false
           - name: git ls-files
             script: git ls-files
@@ -35,7 +41,14 @@ jobs:
             script: uv run pyright ./
             mock_vllm: false
           - name: sourcery review
-            script: uv run sourcery review ./
+            script: |
+              if [ -z "$SOURCERY_TOKEN" ]; then
+                echo "SOURCERY_TOKEN is not set; skipping Sourcery review."
+                exit 0
+              fi
+
+              uv run sourcery login --token "$SOURCERY_TOKEN"
+              uv run sourcery review ./
             mock_vllm: false
           - name: coverage
             script: |
@@ -62,10 +75,9 @@ jobs:
               import urllib.error
               import urllib.request
 
-              token = os.environ.get("SONAR_TOKEN", "").strip()
+              token = os.environ["SONAR_TOKEN"].strip()
               if not token:
-                  print("SONAR_TOKEN is not set; skipping SonarCloud checks.")
-                  raise SystemExit(0)
+                  raise RuntimeError("SONAR_TOKEN secret is empty")
 
               project_key = "handsome-Druid_AICheck"
               auth = base64.b64encode(f"{token}:".encode("ascii")).decode("ascii")
@@ -93,13 +105,14 @@ jobs:
           - name: scc
             script: scc
             mock_vllm: false
+            install_scc: true
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
         with:
           enable-cache: true
           cache-dependency-glob: pyproject.toml
@@ -110,11 +123,30 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Set up Go for scc
+        if: ${{ matrix.install_scc }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Install scc
+        if: ${{ matrix.install_scc }}
+        run: go install github.com/boyter/scc/v3@latest
+
       - name: Generate mock vLLM fixtures
         if: ${{ matrix.mock_vllm }}
         run: |
           uv run python .github/scripts/ci_fixtures.py generate --output output/ci-fixtures --rows 1000 --seed "${{ github.run_id }}"
           printf '%s\n' 'mock fixtures prepared at output/ci-fixtures'
+
+      - name: Generate mock vLLM certificate
+        if: ${{ matrix.mock_vllm }}
+        run: |
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout output/ci-fixtures/mock_server.key \
+            -out output/ci-fixtures/mock_server.crt \
+            -subj "/CN=127.0.0.1" \
+            -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
       - name: Start mock vLLM container
         if: ${{ matrix.mock_vllm }}
@@ -122,11 +154,11 @@ jobs:
           docker run -d --name aicheck-mock-vllm -p 18080:18080 \
             -v "$GITHUB_WORKSPACE:/workspace" \
             python:3.14-slim \
-            python /workspace/.github/scripts/ci_fixtures.py serve --manifest /workspace/output/ci-fixtures/mock_manifest.json --host 0.0.0.0 --port 18080
+            python /workspace/.github/scripts/ci_fixtures.py serve --manifest /workspace/output/ci-fixtures/mock_manifest.json --host 0.0.0.0 --port 18080 --cert /workspace/output/ci-fixtures/mock_server.crt --key /workspace/output/ci-fixtures/mock_server.key
 
       - name: Run step
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SSL_CERT_FILE: ${{ matrix.mock_vllm && format('{0}/output/ci-fixtures/mock_server.crt', github.workspace) || '' }}
         run: ${{ matrix.script }}
 
       - name: Stop mock vLLM container
