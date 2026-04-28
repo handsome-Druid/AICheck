@@ -18,7 +18,7 @@ from src.utils.print_results import print_results
 from src.utils.write_csv import write_csv_from_dataclass
 
 
-MAX_CONCURRENT_REQUESTS = 30
+MAX_CONCURRENT_REQUESTS = 128
 RESULT_SENTINEL = object()
 
 
@@ -91,7 +91,7 @@ async def run() -> None:
 
     import httpx
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+    async with httpx.AsyncClient(timeout=httpx.Timeout(3.0)) as client:
         async for result in iter_results(client):
             await fanout_result(result, print_queue, csv_queue)
 

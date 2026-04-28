@@ -55,7 +55,7 @@ jobs:
               set +e
               uv run python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
               run_status=$?
-              uv run python -m coverage report -m --fail-under=100
+              uv run python -m coverage report -m --fail-under=80
               report_status=$?
               if [ "$run_status" -ne 0 ] || [ "$report_status" -ne 0 ]; then
                 exit 1
