@@ -1,0 +1,134 @@
+name: AICheck Analysis
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  analysis-step:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: uv sync
+            script: uv sync
+            mock_vllm: false
+          - name: ui generation check
+            script: |
+              uv run pyside6-uic src/views/ui/main_window.ui -o "$RUNNER_TEMP/main_window_ui.py"
+              diff -u src/views/ui/main_window_ui.py "$RUNNER_TEMP/main_window_ui.py"
+            mock_vllm: false
+          - name: git ls-files
+            script: git ls-files
+            mock_vllm: false
+          - name: mypy --strict
+            script: uv run mypy --strict ./
+            mock_vllm: false
+          - name: pyright
+            script: uv run pyright ./
+            mock_vllm: false
+          - name: sourcery review
+            script: uv run sourcery review ./
+            mock_vllm: false
+          - name: coverage
+            script: |
+              set +e
+              uv run python -m coverage run --source=src -m unittest discover -s tests -p "test_*.py"
+              run_status=$?
+              uv run python -m coverage report -m --fail-under=100
+              report_status=$?
+              if [ "$run_status" -ne 0 ] || [ "$report_status" -ne 0 ]; then
+                exit 1
+              fi
+            mock_vllm: false
+          - name: pyinstrument integration
+            script: uv run python -m pyinstrument src/main.py --nogui --nopause
+            mock_vllm: true
+          - name: SonarCloud status
+            script: |
+              uv run python - <<'PY'
+              from __future__ import annotations
+
+              import base64
+              import json
+              import os
+              import urllib.error
+              import urllib.request
+
+              token = os.environ.get("SONAR_TOKEN", "").strip()
+              if not token:
+                  print("SONAR_TOKEN is not set; skipping SonarCloud checks.")
+                  raise SystemExit(0)
+
+              project_key = "handsome-Druid_AICheck"
+              auth = base64.b64encode(f"{token}:".encode("ascii")).decode("ascii")
+              headers = {"Authorization": f"Basic {auth}"}
+
+              endpoints = [
+                  ("SonarCloud project status", f"https://sonarcloud.io/api/qualitygates/project_status?projectKey={project_key}"),
+                  ("SonarCloud measures", f"https://sonarcloud.io/api/measures/component?component={project_key}&metricKeys=bugs,vulnerabilities,code_smells,coverage,ncloc,security_hotspots"),
+                  ("SonarCloud issues", f"https://sonarcloud.io/api/issues/search?componentKeys={project_key}&resolved=false&ps=100"),
+              ]
+
+              for title, endpoint in endpoints:
+                  print(f"===== {title} =====")
+                  request = urllib.request.Request(endpoint, headers=headers)
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          payload = json.loads(response.read().decode("utf-8"))
+                  except urllib.error.HTTPError as error:
+                      print(json.dumps({"error": error.read().decode("utf-8", errors="replace")}, ensure_ascii=False, indent=2))
+                      continue
+
+                  print(json.dumps(payload, ensure_ascii=False, indent=2))
+              PY
+            mock_vllm: false
+          - name: scc
+            script: scc
+            mock_vllm: false
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: pyproject.toml
+
+      - name: Install Python 3.14
+        run: uv python install 3.14
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Generate mock vLLM fixtures
+        if: ${{ matrix.mock_vllm }}
+        run: |
+          uv run python .github/scripts/ci_fixtures.py generate --output output/ci-fixtures --rows 1000 --seed "${{ github.run_id }}"
+          printf '%s\n' 'mock fixtures prepared at output/ci-fixtures'
+
+      - name: Start mock vLLM container
+        if: ${{ matrix.mock_vllm }}
+        run: |
+          docker run -d --name aicheck-mock-vllm -p 18080:18080 \
+            -v "$GITHUB_WORKSPACE:/workspace" \
+            python:3.14-slim \
+            python /workspace/.github/scripts/ci_fixtures.py serve --manifest /workspace/output/ci-fixtures/mock_manifest.json --host 0.0.0.0 --port 18080
+
+      - name: Run step
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ${{ matrix.script }}
+
+      - name: Stop mock vLLM container
+        if: ${{ always() && matrix.mock_vllm }}
+        run: docker rm -f aicheck-mock-vllm >/dev/null 2>&1 || true
