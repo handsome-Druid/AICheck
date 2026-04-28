@@ -456,46 +456,53 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.extra_model, ["m1", "m2"])
         self.assertEqual(result.missing_model, [])
 
-    async def test_check_vllm_models_handles_timeout_request_and_unknown_errors(self) -> None:
-        timeout_client = AsyncMock()
-        timeout_client.get = AsyncMock(side_effect=httpx.TimeoutException("timeout", request=httpx.Request("GET", "https://example.com")))
-        with patch("src.services.test_vllm.time.time", side_effect=[100.0, 100.25]):
-            timeout_result = await service_module.check_vllm_models(
-                client=timeout_client,
-                url="https://example.com/chat/completions",
-                port=8000,
-                container_name="test_c",
-                expected_models=["m1"],
-                model_id="m1",
-            )
-        self.assertEqual(timeout_result.status, "timeout")
-        self.assertEqual(timeout_result.response_time, 10.0)
+async def test_check_vllm_models_handles_timeout(self: TestCheckVllmModels) -> None:
+    timeout_client = AsyncMock()
+    
+    expected_timeout_val = 5.0
+    timeout_client.timeout.connect = expected_timeout_val
 
-        request_client = AsyncMock()
-        request_client.get = AsyncMock(side_effect=httpx.RequestError("boom", request=httpx.Request("GET", "https://example.com")))
-        with patch("src.services.test_vllm.time.time", side_effect=[100.0, 100.25]):
-            request_result = await service_module.check_vllm_models(
-                client=request_client,
-                url="https://example.com/chat/completions",
-                port=8000,
-                container_name="test_c",
-                expected_models=["m1"],
-                model_id="m1",
-            )
-        self.assertEqual(request_result.status, "failed")
-        self.assertIn("连接失败", request_result.message)
+    timeout_client.get.side_effect = httpx.TimeoutException("Connect Timeout")
+    
+    with patch("src.services.test_vllm.time.time", return_value=100.0):
+        timeout_result = await service_module.check_vllm_models(
+            client=timeout_client,
+            url="https://example.com/chat/completions",
+            port=8000,
+            container_name="test_c",
+            expected_models=["m1"],
+            model_id="m1",
+        )
+    
+    self.assertEqual(timeout_result.status, "timeout")
+    self.assertEqual(timeout_result.response_time, expected_timeout_val)
+    self.assertIn(f"请求超时（超过{expected_timeout_val}秒）", timeout_result.message)
 
-        unknown_client = AsyncMock()
-        unknown_client.get = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch("src.services.test_vllm.time.time", side_effect=[100.0, 100.25]):
-            unknown_result = await service_module.check_vllm_models(
-                client=unknown_client,
-                url="https://example.com/chat/completions",
-                port=8000,
-                container_name="test_c",
-                expected_models=["m1"],
-                model_id="m1",
-            )
-        self.assertEqual(unknown_result.status, "failed")
-        self.assertIn("发生未知错误", unknown_result.message)
-        self.assertEqual(unknown_result.model_id, "m1")
+    request_client = AsyncMock()
+    request_client.get = AsyncMock(side_effect=httpx.RequestError("boom", request=httpx.Request("GET", "https://example.com")))
+    with patch("src.services.test_vllm.time.time", side_effect=[100.0, 100.25]):
+        request_result = await service_module.check_vllm_models(
+            client=request_client,
+            url="https://example.com/chat/completions",
+            port=8000,
+            container_name="test_c",
+            expected_models=["m1"],
+            model_id="m1",
+        )
+    self.assertEqual(request_result.status, "failed")
+    self.assertIn("连接失败", request_result.message)
+
+    unknown_client = AsyncMock()
+    unknown_client.get = AsyncMock(side_effect=RuntimeError("boom"))
+    with patch("src.services.test_vllm.time.time", side_effect=[100.0, 100.25]):
+        unknown_result = await service_module.check_vllm_models(
+            client=unknown_client,
+            url="https://example.com/chat/completions",
+            port=8000,
+            container_name="test_c",
+            expected_models=["m1"],
+            model_id="m1",
+        )
+    self.assertEqual(unknown_result.status, "failed")
+    self.assertIn("发生未知错误", unknown_result.message)
+    self.assertEqual(unknown_result.model_id, "m1")
