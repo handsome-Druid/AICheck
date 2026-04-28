@@ -60,6 +60,8 @@ jobs:
               if [ "$run_status" -ne 0 ] || [ "$report_status" -ne 0 ]; then
                 exit 1
               fi
+            env:
+              QT_QPA_PLATFORM: offscreen
             mock_vllm: false
           - name: pyinstrument integration
             script: uv run python -m pyinstrument src/main.py --nogui --nopause
@@ -126,7 +128,8 @@ jobs:
       - name: Install system dependencies for PySide6
         run: |
           sudo apt-get update
-          sudo apt-get install -y libegl1 libgl1 libxkbcommon-x11-0 \
+          sudo apt-get install -y libegl1 libgl1 \
+            libxkbcommon-x11-0 libxcb-cursor0 \
             libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 \
             libxcb-xinerama0
