@@ -1,0 +1,69 @@
+name: Build and Release AICheck
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Wait for AICheck Analysis to succeed
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $commit = "${{ github.sha }}"
+          $workflow = "aicheck-analysis.yml"
+          $maxAttempts = 36
+          for ($i = 0; $i -lt $maxAttempts; $i++) {
+            $runs = gh run list --workflow="$workflow" --commit=$commit --limit 1 --json status,conclusion | ConvertFrom-Json
+            if ($runs.Count -eq 0) {
+              Write-Host "Analysis run not created yet, waiting..."
+              Start-Sleep -Seconds 15
+              continue
+            }
+            $status = $runs[0].status
+            if ($status -eq "completed") {
+              if ($runs[0].conclusion -eq "success") {
+                Write-Host "✅ AICheck Analysis succeeded"
+                break
+              } else {
+                Write-Error "❌ AICheck Analysis completed with conclusion: $($runs[0].conclusion)"
+                exit 1
+              }
+            }
+            Write-Host "Current status: $status, attempt $($i+1)..."
+            Start-Sleep -Seconds 15
+          }
+          if ($i -ge $maxAttempts) {
+            Write-Error "Timed out waiting for AICheck Analysis to succeed"
+            exit 1
+          }
+
+      - name: Build EXE with Nuitka (via uv run)
+        run: uv run python -m nuitka --onefile --windows-console-mode=disable --output-dir=output/nuitka --jobs=12 --enable-plugin=pyside6 src/main.py
+
+      - name: Create GitHub Release and upload EXE
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
+        with:
+          name: AICheck ${{ github.ref_name }}
+          files: output/nuitka/main.exe
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
