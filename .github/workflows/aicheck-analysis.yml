@@ -123,6 +123,11 @@ jobs:
       - name: Sync dependencies
         run: uv sync
 
+      - name: Install system dependencies for Qt/PySide6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1-mesa libgl1-mesa-glx libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0
+
       - name: Set up Go for scc
         if: ${{ matrix.install_scc }}
         uses: actions/setup-go@v5
