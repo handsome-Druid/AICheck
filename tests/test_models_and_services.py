@@ -309,6 +309,18 @@ class TestSheetAndAdapter(unittest.TestCase):
         ):
             self.assertEqual(list(read_xlsx_module.read_xlsx(Path("dummy.xlsx"))), [[1, 2], [3, 4]])
 
+    def test_read_xlsx_uses_default_path_when_path_is_missing(self) -> None:
+        fake_sheet = FakeSheet([[5, 6]])
+        fake_workbook = FakeWorkbook(fake_sheet)
+
+        with patch(
+            "src.adapters.read_xlsx.get_config",
+            return_value=SimpleNamespace(xlsx_input_path="default.xlsx", xlsx_input_sheet_name="Sheet1"),
+        ), patch("src.adapters.read_xlsx.CalamineWorkbook.from_path", return_value=fake_workbook) as from_path_mock:
+            self.assertEqual(list(read_xlsx_module.read_xlsx()), [[5, 6]])
+
+        from_path_mock.assert_called_once_with("default.xlsx")
+
     def test_read_xlsx_raises_when_sheet_missing(self) -> None:
         fake_workbook = FakeWorkbook(None)
 

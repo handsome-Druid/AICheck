@@ -18,7 +18,9 @@ except ImportError:
     from src.models.ports import get_ports
 
 
-def check(files: tuple[list[str], list[str], list[str]] = filter_log_files()) -> tuple[dict[int, str], dict[int, str], dict[int, str]]:
+def check(files: tuple[list[str], list[str], list[str]] | None = None) -> tuple[dict[int, str], dict[int, str], dict[int, str]]:
+    if files is None:
+        files = filter_log_files()
     return (
         analyze_results(VLLMTestResult.from_reader(read_csv(os.path.join(get_config().csv_output_path, filename))) for filename in files[0]),
         analyze_results(VLLMTestResult.from_reader(read_csv(os.path.join(get_config().csv_output_path, filename))) for filename in files[1]),
@@ -33,7 +35,9 @@ def analyze_results(results: Generator[Iterator[VLLMTestResult]]) -> dict[int, s
                 result_dict[result.port] = result.message
     return result_dict
 
-def check_headers(files: tuple[list[str], list[str], list[str]] = filter_log_files()) -> None:
+def check_headers(files: tuple[list[str], list[str], list[str]] | None = None) -> None:
+    if files is None:
+        files = filter_log_files()
     for file_list in files:
         for filename in file_list:
             file = read_csv(os.path.join(get_config().csv_output_path, filename))

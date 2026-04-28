@@ -35,8 +35,6 @@ class Sheet(BaseReaderModel):
 
 _sheet_cache: dict[tuple[str, str], Iterator[Sheet]] = {}
 def get_sheet_iterator(path: str | Path | None = None, refresh: bool = True) -> Iterator[Sheet]:
-    config = get_config()
-
     match path:
         case str() | Path() as selected_path:
             source_path = Path(selected_path)
@@ -46,7 +44,7 @@ def get_sheet_iterator(path: str | Path | None = None, refresh: bool = True) -> 
                 case _:
                     source_type = "xlsx"
         case None:
-            match config.source_last_type:
+            match getattr(config := get_config(refresh=True), "source_last_type", "xlsx"):
                 case "csv":
                     source_path = Path(config.csv_input_path)
                     source_type = "csv"

@@ -41,12 +41,11 @@ def _force_import_error_once(target: str) -> Generator[None, None, None]:
 
 class TestImportFallbacks(unittest.TestCase):
     def test_settings_module_uses_import_fallback(self) -> None:
-        settings_path = Path(__file__).resolve().parents[1] / "src" / "config" / "settings.py"
-
-        with _force_import_error_once("src.utils.get_path"):
-            namespace = runpy.run_path(str(settings_path), run_name="__main__")
-
-        self.assertIn("get_config", namespace)
+        namespace = (
+            self._extracted_from_test_write_csv_module_uses_import_fallback_2(
+                "config", "settings.py", "src.utils.get_path", "get_config"
+            )
+        )
         self.assertIn("JsonConfig", namespace)
 
     def test_main_module_uses_import_fallback(self) -> None:
@@ -58,20 +57,18 @@ class TestImportFallbacks(unittest.TestCase):
         self.assertIn("run", namespace)
 
     def test_read_xlsx_module_uses_import_fallback(self) -> None:
-        read_xlsx_path = Path(__file__).resolve().parents[1] / "src" / "adapters" / "read_xlsx.py"
-
-        with _force_import_error_once("src.config"):
-            namespace = runpy.run_path(str(read_xlsx_path), run_name="not_main")
-
-        self.assertIn("read_xlsx", namespace)
+        _namespace = (
+            self._extracted_from_test_write_csv_module_uses_import_fallback_2(
+                "adapters", "read_xlsx.py", "src.config", "read_xlsx"
+            )
+        )
 
     def test_read_csv_module_uses_import_fallback(self) -> None:
-        read_csv_path = Path(__file__).resolve().parents[1] / "src" / "adapters" / "read_csv.py"
-
-        with _force_import_error_once("src.models.type"):
-            namespace = runpy.run_path(str(read_csv_path), run_name="not_main")
-
-        self.assertIn("read_csv", namespace)
+        _namespace = (
+            self._extracted_from_test_write_csv_module_uses_import_fallback_2(
+                "adapters", "read_csv.py", "src.models.type", "read_csv"
+            )
+        )
 
     def test_sheet_module_uses_import_fallback_and_main_block(self) -> None:
         sheet_path = Path(__file__).resolve().parents[1] / "src" / "models" / "sheet.py"
@@ -97,17 +94,22 @@ class TestImportFallbacks(unittest.TestCase):
         mock_write.assert_called_once()
 
     def test_test_print_module_uses_import_fallback(self) -> None:
-        test_print_path = Path(__file__).resolve().parents[1] / "src" / "utils" / "test_print.py"
-
-        with _force_import_error_once("src.models"):
-            namespace = runpy.run_path(str(test_print_path), run_name="not_main")
-
-        self.assertIn("test_print_from_dataclass", namespace)
+        _namespace = (
+            self._extracted_from_test_write_csv_module_uses_import_fallback_2(
+                "utils", "test_print.py", "src.models", "test_print_from_dataclass"
+            )
+        )
 
     def test_write_csv_module_uses_import_fallback(self) -> None:
-        write_csv_path = Path(__file__).resolve().parents[1] / "src" / "utils" / "write_csv.py"
+        _namespace = (
+            self._extracted_from_test_write_csv_module_uses_import_fallback_2(
+                "utils", "write_csv.py", "src.models", "write_csv_from_dataclass"
+            )
+        )
 
-        with _force_import_error_once("src.models"):
-            namespace = runpy.run_path(str(write_csv_path), run_name="not_main")
-
-        self.assertIn("write_csv_from_dataclass", namespace)
+    def _extracted_from_test_write_csv_module_uses_import_fallback_2(self, arg0: str, arg1: str, arg2: str, arg3: str) -> dict[str, object]:
+        settings_path = Path(__file__).resolve().parents[1] / "src" / arg0 / arg1
+        with _force_import_error_once(arg2):
+            result = runpy.run_path(str(settings_path), run_name="not_main")
+        self.assertIn(arg3, result)
+        return result
