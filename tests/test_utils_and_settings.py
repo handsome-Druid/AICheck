@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import runpy
 import sys
 import tempfile
 import unittest
@@ -165,6 +166,21 @@ class TestSettings(unittest.TestCase):
                     settings_module.get_config("missing-settings.json", refresh=True)
 
         self.assertIn("missing-settings.json", str(context.exception))
+
+    def test_settings_module_main_prints_config_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "settings.json"
+            self._write_config_file(
+                config_path,
+                self._make_config_payload("input-main.xlsx", "SheetMain", "input-main.csv", "output-main/", "xlsx", 30420),
+            )
+            stdout = io.StringIO()
+
+            with patch("src.utils.get_path.get_path", return_value=config_path), patch("sys.stdout", stdout):
+                runpy.run_path(str(Path(__file__).resolve().parents[1] / "src" / "config" / "settings.py"), run_name="__main__")
+
+        self.assertIn("input-main.xlsx", stdout.getvalue())
+        self.assertIn("output-main/", stdout.getvalue())
 
 
 class TestWriteCsv(unittest.TestCase):

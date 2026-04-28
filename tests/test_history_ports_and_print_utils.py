@@ -304,7 +304,19 @@ class TestFallbackImports(unittest.TestCase):
     def _extracted_from_test_check_history_results_module_fallback_import_and_main_2(self, arg0: str, arg1: str) -> io.StringIO:
         history_path = self._module_path(arg0, arg1)
         result = io.StringIO()
-        with patch("sys.stdout", result):
+        from types import SimpleNamespace
+        with patch("sys.stdout", result), patch(
+            "src.config.settings.get_config",
+            return_value=SimpleNamespace(csv_output_path=".")
+        ), patch(
+            "src.adapters.read_history_results.get_config",
+            return_value=SimpleNamespace(csv_output_path="."),
+            create=True
+        ), patch(
+            "src.services.check_history_results.get_config",
+            return_value=SimpleNamespace(csv_output_path="."),
+            create=True
+        ):
             self._run_module(history_path, "__main__")
         return result
 

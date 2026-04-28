@@ -13,7 +13,9 @@ except ImportError:
 	from src.models.type import CellGetValue
 
 
-def read_xlsx(path: str | PathLike[str] = get_config().xlsx_input_path) -> Iterator[CellGetValue]:
+def read_xlsx(path: str | PathLike[str] | None = None) -> Iterator[CellGetValue]:
+	if path is None:
+		path = get_config().xlsx_input_path
 	sheet_name = get_config().xlsx_input_sheet_name
 	try:
 		sheet = CalamineWorkbook.from_path(str(path)).get_sheet_by_name(sheet_name)
