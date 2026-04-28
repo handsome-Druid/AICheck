@@ -19,6 +19,7 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SOURCERY_TOKEN: ${{ secrets.SOURCERY_TOKEN }}
+      QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
@@ -60,8 +61,6 @@ jobs:
               if [ "$run_status" -ne 0 ] || [ "$report_status" -ne 0 ]; then
                 exit 1
               fi
-            env:
-              QT_QPA_PLATFORM: offscreen
             mock_vllm: false
           - name: pyinstrument integration
             script: uv run python -m pyinstrument src/main.py --nogui --nopause
