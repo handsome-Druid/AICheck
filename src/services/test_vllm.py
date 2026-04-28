@@ -145,13 +145,17 @@ async def check_vllm_models(
                 model_id=model_id
             )
     except httpx.TimeoutException:
+        if timeout := client.timeout.connect:
+            response_time = timeout
+        else:
+            response_time = 0.0
         return build_result(
             status="timeout",
-            message="请求超时（超过10秒）",
+            message=f"请求超时（超过{response_time}秒）",
             actual_model=[],
             extra_model=[],
             missing_model=[],
-            response_time=10.0,
+            response_time=response_time,
             container_name=container_name,
             model_id=model_id
         )
