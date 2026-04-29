@@ -126,7 +126,7 @@ jobs:
         run: uv python install 3.14
 
       - name: Sync dependencies
-        run: uv sync --no-build --frozen
+        run: uv sync --frozen
 
       - name: Install system dependencies for PySide6
         run: |
