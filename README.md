@@ -11,9 +11,9 @@
 
 ## ✨ 特性
 
-- **批量检测** 同时检测上千个 vLLM 服务端点，识别模型异常。
+- **批量检测** 异步检测vLLM 服务端点，识别模型异常。
 - **详细报告** 每个端点的状态（成功/失败/超时）、实际模型、多余模型、缺失模型、响应时间一目了然。
-- **GUI 与命令行双模式** 提供 PySide6 图形界面，也支持 `--nogui` 无头模式，适合 CI 集成。
+- **GUI 与命令行双模式** 提供 PySide6 图形界面，也支持 `--nogui` `--nopause` 无头模式，适合 CI 集成。
 - **历史数据导入** 支持读取已有的 CSV / XLSX 结果文件进行对比分析。
 - **高性能** 基于 `asyncio` + `httpx` 异步并发，检测速度快。
 - **跨平台** 源码跨平台，同时提供 Windows 单文件 EXE（通过 Nuitka + UPX 压缩打包）。
@@ -45,7 +45,7 @@ uv run python src/main.py
 ### 命令行模式（批量检测）
 
 ```bash
-uv run python src/main.py --nogui --nopause
+uv run python src/main.py --nogui
 ```
 
 程序将从 `settings.json` 读取 vLLM 端点列表并逐一检测，结果自动保存为 CSV。
@@ -58,11 +58,22 @@ uv run python src/main.py --nogui --nopause
 
 ```json
 {
-  "vllm_servers": [
-    {"ip": "127.0.0.1", "port": 30000, "model_id": "model-0000", "container_name": "container-0000"}
-  ],
-  "timeout": 3.0,
-  "output_dir": "output/results"
+    "xlsx": {
+        "input_path": "path/to/xlsx",
+        "input_sheet_name": "Sheet1"
+    },
+    "csv": {
+        "input_path": "path/to/csv",
+        "output_path": "output/"
+    },
+    "source": {
+        "last_type": "xlsx"
+    },
+    "end_flag": {
+        "tag": "str",
+        "value": "object"
+    },
+    "pass_port": []
 }
 ```
 
@@ -70,16 +81,16 @@ uv run python src/main.py --nogui --nopause
 
 ## 🧪 开发与质量
 
-本项目通过严格的 CI 流水线保证代码质量。以下是最新一轮的运行结果摘要：
+本项目通过严格的 CI 流水线保证代码质量。可进入`Actions`查看`AICheck Analysis`获取最新的代码质量审查：
 
 | 检查项 | 工具 | 状态 / 结果 |
 |--------|------|-------------|
 | 类型检查 | Pyright, Mypy `--strict` | ✅ 0 errors / 0 warnings |
 | 静态分析 | SonarCloud | 0 Bugs, 0 Vulnerabilities, 0 Code Smells |
 | 代码审查 | Sourcery | 0 issues |
-| 单元测试 & 覆盖率 | Coverage.py | **100%** 覆盖（966 语句，76 测试全部通过） |
+| 单元测试 & 覆盖率 | Coverage.py | **100%** 覆盖 |
 | 性能分析 | pyinstrument | 集成测试通过（1000 端点检测） |
-| 代码统计 | scc | 34 Python 文件, 3,271 逻辑行, 405 复杂度 |
+| 代码统计 | scc | 代码复杂度较低 |
 | UI 生成校验 | pyside6-uic | 自动生成且无 diff |
 
 想要在本地运行全部检查：
@@ -95,7 +106,7 @@ uv run python -m coverage run --source=src -m unittest discover -s tests && uv r
 ## 📦 构建与发布
 
 CI 流水线会自动使用 Nuitka 构建 Windows 单文件 EXE，并通过 UPX 压缩体积。  
-每当推送新的标签（如 `v1.1.2`）时，会自动创建 GitHub Release 并上传构建产物。
+每当推送新的标签时，会自动创建 GitHub Release 并上传构建产物。
 
 你可以从 [Releases 页面](https://github.com/handsome-Druid/AICheck/releases/latest) 下载最新的 `main.exe`。
 
@@ -114,7 +125,7 @@ uv run python -OO -m nuitka \
 
 ## 📄 许可证
 
-本项目采用 [MIT License](LICENSE) 开源，欢迎贡献。
+本项目采用 [Apache-2.0 License](LICENSE) 开源，欢迎贡献。
 
 ---
 
