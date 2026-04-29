@@ -2,7 +2,7 @@
 
 [![AICheck Analysis](https://github.com/handsome-Druid/AICheck/actions/workflows/aicheck-analysis.yml/badge.svg)](https://github.com/handsome-Druid/AICheck/actions/workflows/aicheck-analysis.yml)
 
-![AICheck 界面截图](assets/screenshot.png)
+![AICheck 界面截图](assets/main_window.png)
 
 **AICheck** 是一个用于自动化验证 vLLM 模型部署正确性的桌面工具。  
 它能够批量连接多个模型服务端点，检查每个端口的模型列表是否与预期一致，并实时反馈连接状态、响应时间、多余/缺失模型等诊断信息。所有结果可导出为 CSV 文件，便于集成到质量保障流程中。
