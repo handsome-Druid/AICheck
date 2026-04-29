@@ -18,4 +18,5 @@ src/views/ui/main_window_ui.py
 main.exe
 
 /analyze.ps1
+/nuitka.ps1
 *.txt
