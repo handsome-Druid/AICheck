@@ -43,7 +43,7 @@ class TestRunThread(QThread):
 			stream = cast(TextIO, SignalStream(self.message.emit))
 			with redirect_stdout(stream), redirect_stderr(stream):
 				asyncio.run(run())
-		except Exception as exc:  # noqa: BLE001
+		except Exception as exc:
 			self.message.emit(f"运行失败: {exc}")
 			self.finishedWithStatus.emit(False, str(exc))
 		else:
@@ -105,7 +105,7 @@ class MainController(QObject):
 	def on_show_history_requested(self) -> None:
 		try:
 			results = check_current()
-		except Exception as exc:  # noqa: BLE001
+		except Exception as exc:
 			self.window.append_std_info(f"加载历史结果失败: {exc}")
 			return
 

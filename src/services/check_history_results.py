@@ -47,13 +47,16 @@ def check_headers(files: tuple[list[str], list[str], list[str]] | None = None) -
 def check_current(results: tuple[dict[int, str], dict[int, str], dict[int, str]] | None = None) -> tuple[dict[int, str], dict[int, str], dict[int, str]]:
     if results is None:
         results = check()
+    config = get_config(refresh=True)
+    pass_ports = (
+        get_ports(read_xlsx(config.xlsx_input_path)) 
+        if config.source_last_type == "xlsx" else 
+        get_ports(read_csv(config.csv_input_path))
+    )
     for result_dict in results:
         ports = list(result_dict.keys())
         for port in ports:
-            if get_config(refresh = True).source_last_type == "xlsx" and port not in get_ports(read_xlsx(get_config(refresh=True).xlsx_input_path)):
-                result_dict.pop(port)
-                continue
-            if port not in get_ports(read_csv(get_config(refresh=True).csv_input_path)):
+            if port not in pass_ports:
                 result_dict.pop(port)
     return results
 
@@ -73,3 +76,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

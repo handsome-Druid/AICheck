@@ -305,21 +305,32 @@ class TestFallbackImports(unittest.TestCase):
         history_path = self._module_path(arg0, arg1)
         result = io.StringIO()
         from types import SimpleNamespace
-        with patch("sys.stdout", result), patch(
-            "src.config.settings.get_config",
-            return_value=SimpleNamespace(csv_output_path=".")
-        ), patch(
-            "src.adapters.read_history_results.get_config",
-            return_value=SimpleNamespace(csv_output_path="."),
-            create=True
-        ), patch(
-            "src.services.check_history_results.get_config",
-            return_value=SimpleNamespace(csv_output_path="."),
-            create=True
-        ):
-            self._run_module(history_path, "__main__")
-        return result
 
+        with patch("sys.stdout", result), \
+            patch("src.config.settings.get_config", return_value=SimpleNamespace(
+                csv_output_path=".",
+                source_last_type="csv",      # 让 check_current 走 csv 分支
+                csv_input_path=".",          # 任意字符串，因 read_csv 已被 mock，不再真正 open
+                xlsx_input_path="."
+            )), \
+            patch("src.adapters.read_history_results.get_config", return_value=SimpleNamespace(
+                csv_output_path=".",
+                source_last_type="csv",
+                csv_input_path=".",
+                xlsx_input_path="."
+            ), create=True), \
+            patch("src.services.check_history_results.get_config", return_value=SimpleNamespace(
+                csv_output_path=".",
+                source_last_type="csv",
+                csv_input_path=".",
+                xlsx_input_path="."
+            ), create=True), \
+            patch("src.adapters.read_csv.read_csv", return_value=iter([["port"], [8000]])), \
+            patch("src.adapters.read_xlsx.read_xlsx", return_value=iter([["port"], [8000]])), \
+            patch("src.models.ports.get_ports", return_value=[8000]):
+            self._run_module(history_path, "__main__")
+
+        return result
 
 if __name__ == "__main__":
     unittest.main()

@@ -324,10 +324,10 @@ def _build_handler(manifest: ManifestMap) -> type[BaseHTTPRequestHandler]:
     class MockVllmHandler(BaseHTTPRequestHandler):
         manifest_map: ClassVar[ManifestMap] = manifest
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             return
 
-        def do_GET(self) -> None:  # noqa: N802
+        def do_GET(self) -> None:
             request_path = urlsplit(self.path).path
             normalized_path = PurePosixPath(request_path)
 
