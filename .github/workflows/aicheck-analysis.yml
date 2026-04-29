@@ -114,7 +114,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
@@ -126,7 +126,7 @@ jobs:
         run: uv python install 3.14
 
       - name: Sync dependencies
-        run: uv sync
+        run: uv sync --no-build --frozen
 
       - name: Install system dependencies for PySide6
         run: |
@@ -142,15 +142,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache: false
 
       - name: Install scc
         if: ${{ matrix.install_scc }}
-        run: go install github.com/boyter/scc/v3@latest
+        run: go install github.com/boyter/scc/v3@b46a15861127998078119430706992f3b0caa286
 
       - name: Generate mock vLLM fixtures
         if: ${{ matrix.mock_vllm }}
         run: |
-          uv run python .github/scripts/ci_fixtures.py generate --output output/ci-fixtures --rows 1000 --seed "${{ github.run_id }}"
+          uv run --frozen python .github/scripts/ci_fixtures.py generate --output output/ci-fixtures --rows 1000 --seed "${{ github.run_id }}"
           printf '%s\n' 'mock fixtures prepared at output/ci-fixtures'
 
       - name: Generate mock vLLM certificate
