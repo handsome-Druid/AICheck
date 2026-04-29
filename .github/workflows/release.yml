@@ -31,6 +31,9 @@ jobs:
       - name: generate ui.py
         run: uv run pyside6-uic src\views\ui\main_window.ui -o src\views\ui\main_window_ui.py
 
+      - name: install upx
+        run: choco install upx -y
+
       - name: Wait for AICheck Analysis to succeed
         shell: pwsh
         env:
@@ -65,7 +68,31 @@ jobs:
           }
 
       - name: Build EXE with Nuitka (via uv run)
-        run: uv run python -OO -m nuitka --onefile --windows-console-mode=disable --output-dir=output/nuitka --jobs=4 --enable-plugin=pyside6 --include-windows-runtime-dlls=yes --lto=yes --assume-yes-for-downloads src/main.py
+        run: uv run python -OO -m nuitka `
+          --onefile `
+          --onefile-no-compression `
+          --standalone `
+          --windows-console-mode=disable `
+          --output-dir=output/nuitka `
+          --assume-yes-for-downloads `
+          --jobs=4 `
+          --lto=yes `
+          --python-flag=-OO `
+          --python-flag=no_asserts `
+          --python-flag=no_warnings `
+          --enable-plugin=pyside6 `
+          --plugin-enable=upx `
+          --noinclude-dlls=qt6webengine* `
+          --noinclude-dlls=qt6opengl* `
+          --nofollow-import-to=unittest `
+          --nofollow-import-to=pyright `
+          --nofollow-import-to=mypy `
+          --nofollow-import-to=sourcery `
+          --nofollow-import-to=pyinstrument `
+          --nofollow-import-to=zstandard `
+          --nofollow-import-to=ordered-set `
+          --nofollow-import-to=coverage `
+          src/main.py
 
       - name: Create GitHub Release and upload EXE
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
