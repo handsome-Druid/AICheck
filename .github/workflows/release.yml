@@ -92,6 +92,7 @@ jobs:
           --nofollow-import-to=zstandard `
           --nofollow-import-to=ordered-set `
           --nofollow-import-to=coverage `
+          --include-windows-runtime-dlls=yes `
           src/main.py
 
       - name: Create GitHub Release and upload EXE
