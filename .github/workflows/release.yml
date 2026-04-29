@@ -8,6 +8,7 @@ on:
 permissions:
   actions: read
   contents: write
+  id-token: write
 
 jobs:
   build:
@@ -94,6 +95,11 @@ jobs:
           --nofollow-import-to=coverage `
           --include-windows-runtime-dlls=yes `
           src/main.py
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: output/nuitka/main.exe
 
       - name: Create GitHub Release and upload EXE
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65

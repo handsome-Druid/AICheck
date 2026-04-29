@@ -139,7 +139,7 @@ jobs:
     
       - name: Set up Go for scc
         if: ${{ matrix.install_scc }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.24'
           cache: false
