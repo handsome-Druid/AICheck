@@ -7,7 +7,7 @@ from datetime import datetime as real_datetime, tzinfo
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Iterator, NoReturn, cast, Optional
+from typing import Iterator, NoReturn, Optional
 from unittest.mock import AsyncMock, patch
 
 import httpx
@@ -74,9 +74,7 @@ class TestSheetAndAdapter(unittest.TestCase):
         self.assertEqual(results[0].port, 30000)
         self.assertEqual(results[0].model_id, "model-a")
         self.assertEqual(results[1].port, 0)
-        self.assertEqual(results[1].model_name, "")
-        self.assertEqual(results[1].gpu_count, 0)
-        self.assertEqual(results[1].context_length, 0)
+
 
     def test_sheet_from_reader_uses_default_reader(self) -> None:
         header: CellGetValue = [
@@ -102,75 +100,9 @@ class TestSheetAndAdapter(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0].model_id, "model-d")
 
-    def test_sheet_from_reader_supports_bool_and_passthrough_types(self) -> None:
-        header: CellGetValue = [
-            "port",
-            "modelID",
-            "模型名",
-            "监控id",
-            "GPU型号",
-            "GPU数量",
-            "上下文长度（K）",
-            "容器名",
-            "调用方法",
-        ]
-        row = cast(
-            CellGetValue,
-            [30003, "model-e", "name-e", "monitor-e", "RTX6000", "yes", ("raw", "value"), "container-e", "https://e/chat/completions"],
-        )
 
-        fake_field_specs = [
-            SimpleNamespace(name="port", metadata={"tag": "port", "type": int}),
-            SimpleNamespace(name="model_id", metadata={"tag": "modelID", "type": str}),
-            SimpleNamespace(name="model_name", metadata={"tag": "模型名", "type": str}),
-            SimpleNamespace(name="monitor_id", metadata={"tag": "监控id", "type": str}),
-            SimpleNamespace(name="gpu_model", metadata={"tag": "GPU型号", "type": str}),
-            SimpleNamespace(name="gpu_count", metadata={"tag": "GPU数量", "type": bool}),
-            SimpleNamespace(name="context_length", metadata={"tag": "上下文长度（K）", "type": object}),
-            SimpleNamespace(name="container_name", metadata={"tag": "容器名", "type": str}),
-            SimpleNamespace(name="call_method", metadata={"tag": "调用方法", "type": str}),
-        ]
+        
 
-        def fake_fields(cls: type[object]) -> list[SimpleNamespace]:
-            return fake_field_specs if cls is sheet_module.Sheet else []
-
-        with patch("src.models.base.fields", side_effect=fake_fields):
-            results = list(sheet_module.Sheet.from_reader(iter([header, row])))
-
-        self.assertTrue(results[0].gpu_count)
-        self.assertEqual(results[0].context_length, ("raw", "value"))
-
-    def test_sheet_from_reader_covers_float_and_untagged_fields(self) -> None:
-        header: CellGetValue = [
-            "port",
-            "modelID",
-            "模型名",
-            "监控id",
-            "GPU型号",
-            "GPU数量",
-            "上下文长度（K）",
-            "容器名",
-            "调用方法",
-        ]
-        row: CellGetValue = [30004, "model-f", "name-f", "monitor-f", "A800", 6, 12.5, "container-f", "https://f/chat/completions"]
-
-        fake_field_specs = [
-            SimpleNamespace(name="port", metadata={"tag": "port", "type": int}),
-            SimpleNamespace(name="model_id", metadata={"tag": "modelID", "type": str}),
-            SimpleNamespace(name="model_name", metadata={"tag": "模型名", "type": str}),
-            SimpleNamespace(name="monitor_id", metadata={"tag": "监控id", "type": str}),
-            SimpleNamespace(name="gpu_model", metadata={"tag": "GPU型号", "type": str}),
-            SimpleNamespace(name="gpu_count", metadata={"tag": "GPU数量", "type": int}),
-            SimpleNamespace(name="context_length", metadata={"tag": "上下文长度（K）", "type": float}),
-            SimpleNamespace(name="container_name", metadata={"tag": "容器名", "type": str}),
-            SimpleNamespace(name="call_method", metadata={"tag": "调用方法", "type": str}),
-            SimpleNamespace(name="ignored", metadata={}),
-        ]
-
-        with patch("src.models.base.fields", return_value=fake_field_specs):
-            results = list(sheet_module.Sheet.from_reader(iter([header, row])))
-
-        self.assertEqual(results[0].context_length, 12.5)
 
     def test_get_sheet_iterator_caches_iterator(self) -> None:
         header = [
@@ -178,9 +110,6 @@ class TestSheetAndAdapter(unittest.TestCase):
             "modelID",
             "模型名",
             "监控id",
-            "GPU型号",
-            "GPU数量",
-            "上下文长度（K）",
             "容器名",
             "调用方法",
         ]

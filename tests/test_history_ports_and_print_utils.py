@@ -169,6 +169,27 @@ class TestBaseReaderModelBranches(unittest.TestCase):
         self.assertIn("_bool", "\n".join(bool_lines))
         self.assertEqual(other_lines, ["    v = row[4]"])
 
+    def test_from_reader_builds_loader_and_returns_base_instance(self) -> None:
+        @dataclass(slots=True, frozen=True)
+        class _TaggedReader(BaseReaderModel):
+            value: int = field(default=0, metadata={"tag": "value", "type": int})
+            ignored: int = field(default=0)
+
+            @classmethod
+            def reset_reader_state_for_test(cls) -> None:
+                cls._cache.clear()
+                cls._tags = ()
+
+        _TaggedReader.reset_reader_state_for_test()
+
+        header_row: CellGetValue = ["value"]
+        data_row: CellGetValue = [123]
+        rows: Iterator[CellGetValue] = iter([header_row, data_row])
+
+        results = list(_TaggedReader.from_reader(rows))
+
+        self.assertEqual(results, [_TaggedReader(value=123)])
+
     def test_from_reader_handles_empty_input(self) -> None:
         self.assertEqual(list(BaseReaderModel.from_reader(iter([]))), [])
 

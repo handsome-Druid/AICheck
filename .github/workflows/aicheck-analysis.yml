@@ -36,9 +36,6 @@ jobs:
               uv run pyside6-uic src/views/ui/main_window.ui -o src/views/ui/main_window_ui.py
               test -f src/views/ui/main_window_ui.py
             mock_vllm: false
-          - name: git ls-files
-            script: git ls-files
-            mock_vllm: false
           - name: mypy --strict
             script: uv run mypy --strict ./
             mock_vllm: false

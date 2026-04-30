@@ -25,11 +25,6 @@ class Sheet(BaseReaderModel):
 
     port: int = field(metadata = {"tag": "port", "type": int})
     model_id: str = field(metadata = {"tag": "modelID", "type": str})
-    model_name: str = field(metadata = {"tag": "模型名", "type": str})
-    monitor_id: str = field(metadata = {"tag": "监控id", "type": str})
-    gpu_model: str = field(metadata = {"tag": "GPU型号", "type": str})
-    gpu_count: int = field(metadata = {"tag": "GPU数量", "type": int})
-    context_length: int = field(metadata = {"tag": "上下文长度（K）", "type": int})
     container_name: str = field(metadata = {"tag": "容器名", "type": str})
     call_method: str = field(metadata = {"tag": "调用方法", "type": str})
 

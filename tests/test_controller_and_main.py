@@ -86,11 +86,11 @@ def _fake_controller_factory(window: _FakeWindow) -> object:
 class TestControllerHelpers(unittest.TestCase):
     def test_iter_batches_groups_items(self) -> None:
         sheets: list[Sheet] = [
-            Sheet(1, "m1", "n1", "mon1", "gpu1", 1, 1, "c1", "u1"),
-            Sheet(2, "m2", "n2", "mon2", "gpu2", 2, 2, "c2", "u2"),
-            Sheet(3, "m3", "n3", "mon3", "gpu3", 3, 3, "c3", "u3"),
-            Sheet(4, "m4", "n4", "mon4", "gpu4", 4, 4, "c4", "u4"),
-            Sheet(5, "m5", "n5", "mon5", "gpu5", 5, 5, "c5", "u5"),
+            Sheet(1, "m1", "n1", "u1"),
+            Sheet(2, "m2", "n2", "u2"),
+            Sheet(3, "m3", "n3", "u3"),
+            Sheet(4, "m4", "n4", "u4"),
+            Sheet(5, "m5", "n5", "u5"),
         ]
 
         batches = list(controller_module.iter_batches(iter(sheets), 2))
