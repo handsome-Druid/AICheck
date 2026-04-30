@@ -347,6 +347,10 @@ class TestSheetAndAdapter(unittest.TestCase):
             def now(cls, tz: Optional[tzinfo] =None):
                 return cls(2026, 4, 27, 10, 0, 0, tzinfo=tz)
 
+        def mock_from_reader(*_args: object, **_kwargs: object) -> Iterator[VLLMTestResult]:
+            sample_result = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "bad", ["m1"], ["m1"], [], [], 0.1)
+            return iter([sample_result])
+
         filenames = [
             "vllm_test_results_20260424_130000.csv",  # Friday afternoon
             "vllm_test_results_20260426_150000.csv",  # Sunday afternoon
@@ -360,18 +364,19 @@ class TestSheetAndAdapter(unittest.TestCase):
             for name in filenames:
                 (output_dir / name).write_text("", encoding="utf-8")
 
-            with patch.object(read_history_results_module, "datetime", FixedMondayDatetime):
-                previous_after_noon, today_morning, today_after_noon = read_history_results_module.filter_log_files(output_dir)
+
+            with patch.object(read_history_results_module, "datetime", FixedMondayDatetime), patch.object(
+                read_history_results_module.VLLMTestResult,
+                "from_reader",
+                side_effect=mock_from_reader,
+            ):
+                results = list(read_history_results_module.filter_log_files(output_dir))
 
         self.assertCountEqual(
-            previous_after_noon,
-            [
-                "vllm_test_results_20260424_130000.csv",
-                "vllm_test_results_20260426_150000.csv",
-            ],
+            [period for period, _ in results],
+            ["2026-04-24 上午", "2026-04-24 下午", "2026-04-26 下午", "2026-04-27 上午", "2026-04-27 下午"],
         )
-        self.assertEqual(today_morning, ["vllm_test_results_20260427_090000.csv"])
-        self.assertEqual(today_after_noon, ["vllm_test_results_20260427_130000.csv"])
+        self.assertTrue(all(len(group) == 1 for _, group in results))
 
 
 class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):

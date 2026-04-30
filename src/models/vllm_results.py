@@ -11,7 +11,7 @@ except ImportError:
 class VLLMTestResult(BaseReaderModel):
     ip: str = field(metadata = {"tag": "ip", "type": str})
     port: int   = field(metadata = {"tag": "port", "type": int})
-    model_id: str = field(metadata = {"tag": "modelID", "type": str})
+    model_id: str = field(metadata = {"tag": "model_id", "type": str})
     container_name: str = field(metadata = {"tag": "container_name", "type": str})
     status: str = field(metadata = {"tag": "status", "type": str})
     message: str = field(metadata = {"tag": "message", "type": str})

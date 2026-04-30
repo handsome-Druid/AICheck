@@ -20,3 +20,4 @@ main.exe
 /analyze.ps1
 /nuitka.ps1
 *.txt
+*.bak

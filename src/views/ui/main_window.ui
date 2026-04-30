@@ -114,59 +114,70 @@
       </layout>
      </widget>
     </item>
-        <item>
-         <widget class="QGroupBox" name="groupBoxHistoryResults">
-            <property name="title">
-             <string>历史测试结果</string>
-            </property>
-            <layout class="QVBoxLayout" name="verticalLayoutHistoryResults">
-             <item>
-                <widget class="QTableWidget" name="tableWidgetHistoryResults">
-                 <property name="editTriggers">
-                    <set>QAbstractItemView::NoEditTriggers</set>
-                 </property>
-                 <column>
-                    <property name="text">
-                     <string>时间段</string>
-                    </property>
-                 </column>
-                 <column>
-                    <property name="text">
-                     <string>端口号</string>
-                    </property>
-                 </column>
-                 <column>
-                    <property name="text">
-                     <string>错误信息</string>
-                    </property>
-                 </column>
-                </widget>
-             </item>
-            </layout>
-         </widget>
-        </item>
+    <item>
+     <widget class="QGroupBox" name="groupBoxHistoryResults">
+      <property name="title">
+       <string>历史测试结果</string>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayoutHistoryResults">
+       <item>
+        <widget class="QTableWidget" name="tableWidgetHistoryResults">
+         <property name="editTriggers">
+          <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+         </property>
+         <column>
+          <property name="text">
+           <string>时间段</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>端口号</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>模型名称</string>
+          </property>
+         </column>
+         <column>
+          <property name="text">
+           <string>错误信息</string>
+          </property>
+         </column>
+        </widget>
+       </item>
+      </layout>
+     </widget>
+    </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayoutButton">
       <item>
        <spacer name="horizontalSpacerLeft">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
         </property>
        </spacer>
       </item>
-    <item>
-     <widget class="QPushButton" name="pushButtonShowHistoryResults">
-      <property name="minimumSize">
-       <size>
-        <width>180</width>
-        <height>40</height>
-       </size>
-      </property>
-      <property name="text">
-       <string>显示历史测试结果</string>
-      </property>
-     </widget>
-    </item>
+      <item>
+       <widget class="QPushButton" name="pushButtonShowHistoryResults">
+        <property name="minimumSize">
+         <size>
+          <width>180</width>
+          <height>40</height>
+         </size>
+        </property>
+        <property name="text">
+         <string>显示历史测试结果</string>
+        </property>
+       </widget>
+      </item>
       <item>
        <widget class="QPushButton" name="pushButtonStartTest">
         <property name="minimumSize">
@@ -183,7 +194,13 @@
       <item>
        <spacer name="horizontalSpacerRight">
         <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+         <enum>Qt::Orientation::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>0</width>
+          <height>0</height>
+         </size>
         </property>
        </spacer>
       </item>

@@ -175,7 +175,7 @@ class FakeWindow:
         self.ui = SimpleNamespace(lineEditSheetName=FakeLineEdit(enabled=sheet_enabled))
         self.messages: list[str] = []
         self.enabled_states: list[bool] = []
-        self.history_rows: list[tuple[str, int, str]] = []
+        self.history_rows: list[tuple[str, int, str, str]] = []
 
     def append_std_info(self, text: str) -> None:
         self.messages.append(text)
@@ -183,7 +183,7 @@ class FakeWindow:
     def set_enabled(self, enabled: bool) -> None:
         self.enabled_states.append(enabled)
 
-    def show_history_results(self, rows: list[tuple[str, int, str]]) -> None:
+    def show_history_results(self, rows: list[tuple[str, int, str, str]]) -> None:
         self.history_rows = rows
 
 
@@ -316,12 +316,13 @@ class TestMainWindow(unittest.TestCase):
         browse_history_button.clicked.emit()
         self.assertEqual(history_requested, [True])
 
-        window.show_history_results([("今天上午", 8000, "failed")])
+        window.show_history_results([("今天上午", 8000, "model_id", "failed")])
         table = cast(FakeTableWidget, window.ui.tableWidgetHistoryResults)
         self.assertEqual(table.row_count, 1)
         self.assertEqual(table.contents[(0, 0)], "今天上午")
         self.assertEqual(table.contents[(0, 1)], "8000")
-        self.assertEqual(table.contents[(0, 2)], "failed")
+        self.assertEqual(table.contents[(0, 2)], "model_id")
+        self.assertEqual(table.contents[(0, 3)], "failed")
 
         window.ui.lineEditDataSourcePath.setText("")
         window.ui.lineEditOutputDirPath.setText("C:/out")
@@ -518,21 +519,23 @@ class TestMainController(unittest.TestCase):
         window = FakeWindow(sheet_enabled=True)
         controller = controller_module.MainController(window)
 
-        history: tuple[dict[int, str], dict[int, str], dict[int, str]] = (
-            {8002: "e2", 8001: "e1"},
-            {},
-            {9000: "e9"},
-        )
-
-        with patch.object(controller_module, "check_current", return_value=history):
+        with patch.object(
+            controller_module,
+            "analyze_results",
+            return_value=iter([
+                ("上一个工作日下午", 8002, "e2", "m2"),
+                ("上一个工作日下午", 8001, "e1", "m1"),
+                ("今天下午", 9000, "e9", "m9"),
+            ]),
+        ):
             controller.on_show_history_requested()
 
         self.assertEqual(
             window.history_rows,
             [
-                ("上一个工作日下午", 8001, "e1"),
-                ("上一个工作日下午", 8002, "e2"),
-                ("今天下午", 9000, "e9"),
+                ("上一个工作日下午", 8002, "m2", "e2"),
+                ("上一个工作日下午", 8001, "m1", "e1"),
+                ("今天下午", 9000, "m9", "e9"),
             ],
         )
         self.assertIn("已加载历史测试结果，共 3 条。", window.messages)
@@ -541,7 +544,7 @@ class TestMainController(unittest.TestCase):
         window = FakeWindow(sheet_enabled=True)
         controller = controller_module.MainController(window)
 
-        with patch.object(controller_module, "check_current", side_effect=RuntimeError("bad-history")):
+        with patch.object(controller_module, "analyze_results", side_effect=RuntimeError("bad-history")):
             controller.on_show_history_requested()
 
         self.assertIn("加载历史结果失败: bad-history", window.messages)

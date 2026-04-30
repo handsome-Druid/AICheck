@@ -11,14 +11,8 @@ from PySide6.QtCore import QObject, QThread, Signal
 from src.config.settings import update_config
 from src.controllers.vllm_test_controller import run
 from src.models.type import MainWindowLike, WorkerLike
-from src.services.check_history_results import check_current
+from src.services.check_history_results import analyze_results
 
-
-HISTORY_PERIOD_LABELS = (
-	"上一个工作日下午",
-	"今天上午",
-	"今天下午",
-)
 
 
 class SignalStream(io.TextIOBase):
@@ -104,15 +98,16 @@ class MainController(QObject):
 
 	def on_show_history_requested(self) -> None:
 		try:
-			results = check_current()
+			results = analyze_results()
 		except Exception as exc:
 			self.window.append_std_info(f"加载历史结果失败: {exc}")
 			return
 
-		rows: list[tuple[str, int, str]] = []
-		for period_label, result_dict in zip(HISTORY_PERIOD_LABELS, results):
-			rows.extend((period_label, port, error_message) for port, error_message in sorted(result_dict.items()))
-
+		# analyze_results() yields Iterator[tuple[str, int, str, str]]
+		# 返回顺序是: (period, port, message, model_id)
+		# 表格列顺序需要是: (period, port, model_id, message)
+		rows: list[tuple[str, int, str, str]] = []
+		rows.extend((period, port, model_id, message) for period, port, message, model_id in results)
 		self.window.show_history_results(rows)
 		self.window.append_std_info(f"已加载历史测试结果，共 {len(rows)} 条。")
 

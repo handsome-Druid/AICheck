@@ -49,38 +49,97 @@ def _force_import_error_once(target: str) -> Generator[None, None, None]:
 
 
 class TestHistoryAdapter(unittest.TestCase):
-    def test_filter_log_files_handles_missing_dir_and_bad_name(self) -> None:
-        with patch.object(history_adapter, "get_config", return_value=SimpleNamespace(csv_output_path="missing-dir")):
-            self.assertEqual(history_adapter.filter_log_files(None), ([], [], []))
+    def test_filter_log_files_uses_december_month_end_branch(self) -> None:
+        class FixedDecemberDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz: Optional[tzinfo] = None):
+                return cls(2026, 12, 15, 10, 0, 0, tzinfo=tz)
 
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            (output_dir / "vllm_test_results_20261215_080000.csv").write_text("", encoding="utf-8")
+            sample_result = VLLMTestResult("127.0.0.1", 8010, "m10", "c10", "failed", "bad", ["m10"], ["m10"], [], [], 1.0)
+
+            with patch.object(history_adapter, "get_config", return_value=SimpleNamespace(csv_output_path=str(output_dir))), patch.object(
+                history_adapter, "datetime", FixedDecemberDatetime
+            ), patch.object(history_adapter.VLLMTestResult, "from_reader", return_value=iter([sample_result])):
+                results = list(history_adapter.filter_log_files(None))
+
+        self.assertEqual(results, [("2026-12-15 上午", [sample_result])])
+
+    def test_filter_log_files_handles_default_directory_and_import_fallback(self) -> None:
         class FixedDatetime(real_datetime):
             @classmethod
-            def now(cls, tz: Optional[tzinfo] =None):
+            def now(cls, tz: Optional[tzinfo] = None):
+                return cls(2026, 4, 30, 15, 0, 0, tzinfo=tz)
+
+        def mock_from_reader(*_args: object, **_kwargs: object) -> Iterator[VLLMTestResult]:
+            sample_result = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "bad", ["m1"], ["m1"], [], [], 0.1)
+            return iter([sample_result])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            (output_dir / "subdir").mkdir()
+            (output_dir / "not_a_result.txt").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_bad.csv").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_20260430_080000.csv").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_20260430_130000.csv").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_20260501_080000.csv").write_text("", encoding="utf-8")
+
+            sample_result = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "bad", ["m1"], ["m1"], [], [], 0.1)
+
+            with patch.object(history_adapter, "get_config", return_value=SimpleNamespace(csv_output_path=str(output_dir))), patch.object(
+                history_adapter, "datetime", FixedDatetime
+            ), _force_import_error_once("src.adapters.read_csv"), patch.object(
+                history_adapter.VLLMTestResult,
+                "from_reader",
+                side_effect=mock_from_reader,
+            ):
+                results = list(history_adapter.filter_log_files(None))
+
+        self.assertCountEqual([period for period, _ in results], ["2026-04-30 上午", "2026-04-30 下午"])
+        self.assertTrue(all(group == [sample_result] for _, group in results))
+
+    def test_filter_log_files_handles_missing_dir_and_bad_name(self) -> None:
+        class FixedDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz: Optional[tzinfo] = None):
                 return cls(2026, 4, 28, 15, 0, 0, tzinfo=tz)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir)
-            (output_dir / "vllm_test_results_20260428_080000.csv").write_text("", encoding="utf-8")
+            valid_path = output_dir / "vllm_test_results_20260428_080000.csv"
+            valid_path.write_text("", encoding="utf-8")
             (output_dir / "vllm_test_results_bad_name.csv").write_text("", encoding="utf-8")
 
-            with patch.object(history_adapter, "datetime", FixedDatetime):
-                previous_after_noon, today_morning, today_after_noon = history_adapter.filter_log_files(output_dir)
+            sample_result = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "bad", ["m1"], ["m1"], [], [], 0.1)
 
-        self.assertEqual(previous_after_noon, [])
-        self.assertEqual(today_morning, ["vllm_test_results_20260428_080000.csv"])
-        self.assertEqual(today_after_noon, [])
+            with patch.object(history_adapter, "datetime", FixedDatetime), patch.object(
+                history_adapter.VLLMTestResult,
+                "from_reader",
+                return_value=iter([sample_result]),
+            ) as from_reader_mock:
+                results = list(history_adapter.filter_log_files(output_dir))
+
+        self.assertEqual(results, [("2026-04-28 上午", [sample_result])])
+        from_reader_mock.assert_called_once()
+        self.assertEqual(valid_path.name, "vllm_test_results_20260428_080000.csv")
 
     def test_history_adapter_main_prints_three_periods(self) -> None:
         output = io.StringIO()
-        with patch.object(history_adapter, "filter_log_files", return_value=(["a.csv"], ["b.csv"], ["c.csv"])), patch(
-            "sys.stdout", output
-        ):
+        results = [
+            ("昨天上午", [VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "a", ["m1"], ["m1"], [], [], 0.1)]),
+            ("今天上午", [VLLMTestResult("127.0.0.1", 8001, "m2", "c2", "success", "b", ["m2"], ["m2"], [], [], 0.2)]),
+            ("今天下午", [VLLMTestResult("127.0.0.1", 8002, "m3", "c3", "failed", "c", ["m3"], ["m3"], [], [], 0.3)]),
+        ]
+
+        with patch.object(history_adapter, "filter_log_files", return_value=iter(results)), patch("sys.stdout", output):
             history_adapter.main()
 
         text = output.getvalue()
-        self.assertIn("昨天下午:", text)
-        self.assertIn("今天上午:", text)
-        self.assertIn("今天下午:", text)
+        self.assertIn("昨天上午: 8000: a (failed)", text)
+        self.assertIn("今天上午: 8001: b (success)", text)
+        self.assertIn("今天下午: 8002: c (failed)", text)
 
 
 class TestBaseReaderModelBranches(unittest.TestCase):
@@ -110,6 +169,9 @@ class TestBaseReaderModelBranches(unittest.TestCase):
         self.assertIn("_bool", "\n".join(bool_lines))
         self.assertEqual(other_lines, ["    v = row[4]"])
 
+    def test_from_reader_handles_empty_input(self) -> None:
+        self.assertEqual(list(BaseReaderModel.from_reader(iter([]))), [])
+
 
 class TestPortsAndHistoryService(unittest.TestCase):
     def test_get_ports_filters_pass_port(self) -> None:
@@ -118,75 +180,42 @@ class TestPortsAndHistoryService(unittest.TestCase):
             ports = ports_module.get_ports(rows)
         self.assertEqual(ports, [8000])
 
-    def test_history_service_check_and_analyze_and_headers(self) -> None:
-        row_header = [
-            "ip",
-            "port",
-            "modelID",
-            "container_name",
-            "status",
-            "message",
-            "actual_model",
-            "expected_model",
-            "extra_model",
-            "missing_model",
-            "response_time",
-        ]
-        row_failed = ["127.0.0.1", 8000, "m1", "c1", "failed", "e1", ["m1"], ["m1"], [], [], 0.1]
-        row_success = ["127.0.0.1", 8001, "m2", "c2", "success", "ok", ["m2"], ["m2"], [], [], 0.2]
+    def test_analyze_results_filters_failed_rows_and_deduplicates(self) -> None:
+        failed_one = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "e1", ["m1"], ["m1"], [], [], 0.1)
+        failed_two = VLLMTestResult("127.0.0.1", 8001, "m2", "c2", "failed", "e2", ["m2"], ["m2"], [], [], 0.2)
+        success = VLLMTestResult("127.0.0.1", 8002, "m3", "c3", "success", "ok", ["m3"], ["m3"], [], [], 0.3)
 
-        with patch.object(history_service, "get_config", return_value=SimpleNamespace(csv_output_path="C:/out")), patch.object(
-            history_service, "read_csv", return_value=iter([row_header, row_failed, row_success])
-        ):
-            results = history_service.check(( ["a.csv"], [], [] ))
+        inputs = iter([
+            ("昨天中午12点到今天凌晨0点的测试结果", [failed_one, failed_one, success]),
+            ("今天凌晨0点到今天中午12点的测试结果", [failed_two]),
+        ])
 
-        self.assertEqual(results[0], {8000: "e1"})
-        self.assertEqual(results[1], {})
-        self.assertEqual(results[2], {})
+        results = set(history_service.analyze_results(inputs))
 
+        self.assertEqual(
+            results,
+            {
+                ("昨天中午12点到今天凌晨0点的测试结果", 8000, "e1", "m1"),
+                ("今天凌晨0点到今天中午12点的测试结果", 8001, "e2", "m2"),
+            },
+        )
+
+    def test_analyze_results_uses_default_filter_log_files(self) -> None:
+        failed = VLLMTestResult("127.0.0.1", 8003, "m4", "c4", "failed", "e4", ["m4"], ["m4"], [], [], 0.4)
+
+        with patch.object(history_service, "filter_log_files", return_value=iter([("今天下午", [failed])])) as filter_mock:
+            results = list(history_service.analyze_results())
+
+        filter_mock.assert_called_once()
+        self.assertEqual(results, [("今天下午", 8003, "e4", "m4")])
+
+    def test_history_service_main_prints_results(self) -> None:
         output = io.StringIO()
-        with patch.object(history_service, "get_config", return_value=SimpleNamespace(csv_output_path="C:/out")), patch.object(
-            history_service, "read_csv", return_value=iter([["h1", "h2"], [1, 2]])
-        ), patch("sys.stdout", output):
-            history_service.check_headers((["a.csv"], [], []))
+        with patch.object(history_service, "analyze_results", return_value=iter([("今天下午", 8004, "e5", "m5")])):
+            with patch("sys.stdout", output):
+                history_service.main()
 
-        self.assertIn("a.csv header: ['h1', 'h2']", output.getvalue())
-
-    def test_check_current_filters_ports_and_main(self) -> None:
-        with patch.object(
-            history_service,
-            "get_config",
-            return_value=SimpleNamespace(source_last_type="xlsx", xlsx_input_path="x.xlsx", csv_input_path="x.csv"),
-        ), patch.object(history_service, "read_xlsx", return_value=iter([["port"], [8000]])), patch.object(
-            history_service, "read_csv", return_value=iter([["port"], [8000]])
-        ), patch.object(history_service, "get_ports", side_effect=[[8000], [8000], [8000]]):
-            filtered = history_service.check_current(({8000: "e0", 8001: "e1"}, {}, {}))
-
-        self.assertEqual(filtered[0], {8000: "e0"})
-
-        output = io.StringIO()
-        with patch.object(history_service, "check_headers", return_value=None), patch.object(
-            history_service, "check_current", return_value=({8000: "e0"}, {8100: "e1"}, {9000: "e9"})
-        ), patch("sys.stdout", output):
-            history_service.main()
-
-        text = output.getvalue()
-        self.assertIn("昨天中午12点到今天凌晨0点的测试结果:", text)
-        self.assertIn("8000: e0", text)
-        self.assertIn("8100: e1", text)
-        self.assertIn("9000: e9", text)
-
-    def test_check_current_none_and_csv_filter_branch(self) -> None:
-        with patch.object(history_service, "check", return_value=({8000: "e0"}, {}, {})), patch.object(
-            history_service,
-            "get_config",
-            return_value=SimpleNamespace(source_last_type="csv", xlsx_input_path="x.xlsx", csv_input_path="x.csv"),
-        ), patch.object(history_service, "read_csv", return_value=iter([["port"], [9000]])), patch.object(
-            history_service, "get_ports", return_value=[9000]
-        ):
-            filtered = history_service.check_current(None)
-
-        self.assertEqual(filtered, ({}, {}, {}))
+        self.assertIn("今天下午: 8004: e5 (m5)", output.getvalue())
 
 
 class TestPrintResults(unittest.TestCase):
@@ -237,7 +266,7 @@ class TestFallbackImports(unittest.TestCase):
         cases = [
             (self._module_path("models", "base.py"), "src.models.type", "BaseReaderModel"),
             (self._module_path("adapters", "read_history_results.py"), "src.config.settings", "filter_log_files"),
-            (self._module_path("services", "check_history_results.py"), "src.adapters.read_history_results", "check_current"),
+            (self._module_path("services", "check_history_results.py"), "src.adapters.read_history_results", "analyze_results"),
             (self._module_path("utils", "print_results.py"), "src.models.vllm_results", "print_results"),
         ]
 
@@ -286,49 +315,75 @@ class TestFallbackImports(unittest.TestCase):
         return result
 
     def test_read_history_results_module_fallback_import(self) -> None:
-        main_output = self._extracted_from_test_check_history_results_module_fallback_import_and_main_2(
-            "adapters", "read_history_results.py"
-        )
-        self.assertIn("今天下午:", main_output.getvalue())
+        main_output = self._run_history_adapter_main_with_mocked_results()
+        self.assertIn("今天下午: 8000: bad (failed)", main_output.getvalue())
 
     def test_check_history_results_module_fallback_import_and_main(self) -> None:
-        output = self._extracted_from_test_check_history_results_module_fallback_import_and_main_2(
-            "services", "check_history_results.py"
-        )
+        output = self._run_history_service_main_with_mocked_results()
         text = output.getvalue()
-        self.assertIn("昨天中午12点到今天凌晨0点的测试结果:", text)
-        self.assertIn("今天凌晨0点到今天中午12点的测试结果:", text)
-        self.assertIn("今天中午12点到现在的测试结果:", text)
+        self.assertIn("昨天中午12点到今天凌晨0点的测试结果: 8000: bad (m1)", text)
+        self.assertIn("今天凌晨0点到今天中午12点的测试结果: 8001: warn (m2)", text)
+        self.assertIn("今天中午12点到现在的测试结果: 8002: ok (m3)", text)
 
-
-    def _extracted_from_test_check_history_results_module_fallback_import_and_main_2(self, arg0: str, arg1: str) -> io.StringIO:
-        history_path = self._module_path(arg0, arg1)
+    def test_read_history_results_module_main_guard(self) -> None:
+        history_path = self._module_path("adapters", "read_history_results.py")
         result = io.StringIO()
-        from types import SimpleNamespace
 
-        with patch("sys.stdout", result), \
-            patch("src.config.settings.get_config", return_value=SimpleNamespace(
-                csv_output_path=".",
-                source_last_type="csv",      # 让 check_current 走 csv 分支
-                csv_input_path=".",          # 任意字符串，因 read_csv 已被 mock，不再真正 open
-                xlsx_input_path="."
-            )), \
-            patch("src.adapters.read_history_results.get_config", return_value=SimpleNamespace(
-                csv_output_path=".",
-                source_last_type="csv",
-                csv_input_path=".",
-                xlsx_input_path="."
-            ), create=True), \
-            patch("src.services.check_history_results.get_config", return_value=SimpleNamespace(
-                csv_output_path=".",
-                source_last_type="csv",
-                csv_input_path=".",
-                xlsx_input_path="."
-            ), create=True), \
-            patch("src.adapters.read_csv.read_csv", return_value=iter([["port"], [8000]])), \
-            patch("src.adapters.read_xlsx.read_xlsx", return_value=iter([["port"], [8000]])), \
-            patch("src.models.ports.get_ports", return_value=[8000]):
+        class FixedDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz: Optional[tzinfo] = None):
+                return cls(2026, 4, 30, 15, 0, 0, tzinfo=tz)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            (output_dir / "vllm_test_results_20260430_080000.csv").write_text("", encoding="utf-8")
+            sample_result = VLLMTestResult("127.0.0.1", 8009, "m9", "c9", "failed", "bad", ["m9"], ["m9"], [], [], 0.9)
+
+            with patch("sys.stdout", result), patch("datetime.datetime", FixedDatetime), patch(
+                "src.config.settings.get_config", return_value=SimpleNamespace(csv_output_path=str(output_dir))
+            ), patch(
+                "src.models.vllm_results.VLLMTestResult.from_reader",
+                return_value=iter([sample_result]),
+            ), patch("src.adapters.read_csv.read_csv", return_value=iter([["port"], [8009]])):
+                self._run_module(history_path, "__main__")
+
+        self.assertIn("2026-04-30 上午: 8009: bad (failed)", result.getvalue())
+
+    def test_check_history_results_module_main_guard(self) -> None:
+        history_path = self._module_path("services", "check_history_results.py")
+        result = io.StringIO()
+
+        with patch("sys.stdout", result), patch(
+            "src.adapters.read_history_results.filter_log_files",
+            return_value=iter([("今天下午", [VLLMTestResult("127.0.0.1", 8007, "m7", "c7", "failed", "bad", ["m7"], ["m7"], [], [], 0.7)])]),
+        ):
             self._run_module(history_path, "__main__")
+
+        self.assertIn("今天下午: 8007: bad (m7)", result.getvalue())
+
+    def _run_history_adapter_main_with_mocked_results(self) -> io.StringIO:
+        result = io.StringIO()
+        sample_failed = VLLMTestResult("127.0.0.1", 8000, "m1", "c1", "failed", "bad", ["m1"], ["m1"], [], [], 0.1)
+
+        with patch("sys.stdout", result), patch(
+            "src.adapters.read_history_results.filter_log_files", return_value=iter([("今天下午", [sample_failed])])
+        ):
+            history_adapter.main()
+
+        return result
+
+    def _run_history_service_main_with_mocked_results(self) -> io.StringIO:
+        result = io.StringIO()
+        sample_results = iter([
+            ("昨天中午12点到今天凌晨0点的测试结果", 8000, "bad", "m1"),
+            ("今天凌晨0点到今天中午12点的测试结果", 8001, "warn", "m2"),
+            ("今天中午12点到现在的测试结果", 8002, "ok", "m3"),
+        ])
+
+        with patch("sys.stdout", result), patch(
+            "src.services.check_history_results.analyze_results", return_value=sample_results
+        ):
+            history_service.main()
 
         return result
 

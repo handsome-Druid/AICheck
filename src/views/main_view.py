@@ -57,7 +57,8 @@ class MainWindow(QMainWindow):
 
 		header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
 		header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-		header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+		header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+		header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
 		header.setMinimumSectionSize(110)
 
 		vertical_header = table.verticalHeader()
@@ -145,7 +146,7 @@ class MainWindow(QMainWindow):
 	def _show_history_results(self) -> None:
 		self.showHistoryRequested.emit()
 
-	def show_history_results(self, rows: list[tuple[str, int, str]]) -> None:
+	def show_history_results(self, rows: list[tuple[str, int, str, str]]) -> None:
 		table = self.ui.tableWidgetHistoryResults
 		table.clearContents()
 		table.setRowCount(len(rows))

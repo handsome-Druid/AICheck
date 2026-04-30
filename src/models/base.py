@@ -68,8 +68,10 @@ class BaseReaderModel:
 
     @classmethod
     def from_reader(cls, reader: Iterator[CellGetValue]) -> Iterator[Self]:
-
-        header_map = {str(name): i for i, name in enumerate(next(reader))}
+        try:
+            header_map = {str(name): i for i, name in enumerate(next(reader))}
+        except StopIteration:
+            return
 
         if not getattr(cls, "_tags", None):
             cls._tags = tuple(
