@@ -18,9 +18,9 @@ async def check_vllm_models(
         ) -> VLLMTestResult:
 
     import httpx
-
-    url = url.replace("chat/completions","models")
-    ip = urlparse(url).hostname or ""
+    _urlparse_result = urlparse(url)
+    ip = _urlparse_result.hostname or ""
+    url = f"{_urlparse_result.scheme}://{ip}:{port}/v1/models"
 
     headers: dict[str, str] = {}
 
@@ -50,7 +50,7 @@ async def check_vllm_models(
             container_name=container_name,
             model_id=model_id
         )
-    
+
     try:
         start_time = time.time()
 
@@ -68,7 +68,7 @@ async def check_vllm_models(
                 container_name=container_name,
                 model_id=model_id
             )
-        
+
         try:
             data = response.json()
             if "data" not in data:
@@ -86,7 +86,7 @@ async def check_vllm_models(
             available_models = [model["id"] for model in data["data"]]
             missing = [model for model in expected_models if model not in available_models]
             extra = [model for model in available_models if model not in expected_models]
-            
+
             match (missing, extra):
                 case ([], []):
                     return build_result(

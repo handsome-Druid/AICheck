@@ -354,7 +354,7 @@ class TestCheckVllmModels(unittest.IsolatedAsyncioTestCase):
         client.get.assert_awaited_once()
         called_url = client.get.await_args.args[0]
         called_headers = client.get.await_args.kwargs["headers"]
-        self.assertEqual(called_url, "https://example.com/models")
+        self.assertEqual(called_url, "https://example.com:8000/v1/models")
         self.assertEqual(called_headers, {"Authorization": "Bearer secret"})
 
     async def test_check_vllm_models_reports_missing_extra_and_both(self) -> None:
