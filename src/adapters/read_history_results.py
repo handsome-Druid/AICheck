@@ -16,7 +16,7 @@ from datetime import datetime
 
 def filter_log_files(directory: None | str | os.PathLike[str] = None) -> Iterator[Tuple[str, list[VLLMTestResult]]]:
     if directory is None:
-        directory = get_config().csv_output_path
+        directory = get_config(refresh=True).csv_output_path
 
     month_start, month_end = _get_current_month_bounds()
     include_from = month_start - timedelta(days=1)

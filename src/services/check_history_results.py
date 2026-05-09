@@ -2,23 +2,24 @@ from typing import Iterator
 try:
     from src.adapters.read_history_results import filter_log_files
     from src.models.vllm_results import VLLMTestResult
+    from src.config.settings import get_config
 except ImportError:
     import sys
     import os
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
     from src.adapters.read_history_results import filter_log_files
     from src.models.vllm_results import VLLMTestResult
+    from src.config.settings import get_config
 
 def analyze_results(files: Iterator[tuple[str, list[VLLMTestResult]]] | None = None) -> Iterator[tuple[str, int, str, str]]:
     if files is None:
         files = filter_log_files()
+    pass_port = get_config(refresh=True).pass_port
     for period, results in files:
         result_list: list[tuple[str, int, str, str]] = []
-        result_list.extend(
-            (period, result.port, result.message, result.model_id)
-            for result in results
-            if result.status != "success"
-        )
+        for result in results:
+            if result.status != "success" and (port := result.port) not in pass_port:
+                result_list.append((period, port, result.message, result.model_id))
         yield from set(result_list)
 
 def main() -> None:
