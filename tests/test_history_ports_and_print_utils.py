@@ -235,7 +235,8 @@ class TestPortsAndHistoryService(unittest.TestCase):
             ("今天凌晨0点到今天中午12点的测试结果", [failed_two]),
         ])
 
-        results = set(history_service.analyze_results(inputs))
+        with patch.object(history_service, "get_config", return_value=SimpleNamespace(pass_port=[])):
+            results = set(history_service.analyze_results(inputs))
 
         self.assertEqual(
             results,
@@ -248,11 +249,24 @@ class TestPortsAndHistoryService(unittest.TestCase):
     def test_analyze_results_uses_default_filter_log_files(self) -> None:
         failed = VLLMTestResult("127.0.0.1", 8003, "m4", "c4", "failed", "e4", ["m4"], ["m4"], [], [], 0.4)
 
-        with patch.object(history_service, "filter_log_files", return_value=iter([("今天下午", [failed])])) as filter_mock:
+        with patch.object(history_service, "filter_log_files", return_value=iter([("今天下午", [failed])])) as filter_mock, patch.object(
+            history_service, "get_config", return_value=SimpleNamespace(pass_port=[])
+        ):
             results = list(history_service.analyze_results())
 
         filter_mock.assert_called_once()
         self.assertEqual(results, [("今天下午", 8003, "e4", "m4")])
+
+    def test_analyze_results_skips_pass_port(self) -> None:
+        failed_keep = VLLMTestResult("127.0.0.1", 8010, "m10", "c10", "failed", "bad", ["m10"], ["m10"], [], [], 1.0)
+        failed_skip = VLLMTestResult("127.0.0.1", 8011, "m11", "c11", "failed", "skip", ["m11"], ["m11"], [], [], 1.1)
+
+        inputs = iter([("morning", [failed_keep, failed_skip])])
+
+        with patch.object(history_service, "get_config", return_value=SimpleNamespace(pass_port=[8011])):
+            results = set(history_service.analyze_results(inputs))
+
+        self.assertEqual(results, {("morning", 8010, "bad", "m10")})
 
     def test_history_service_main_prints_results(self) -> None:
         output = io.StringIO()
@@ -401,7 +415,7 @@ class TestFallbackImports(unittest.TestCase):
         with patch("sys.stdout", result), patch(
             "src.adapters.read_history_results.filter_log_files",
             return_value=iter([("今天下午", [VLLMTestResult("127.0.0.1", 8007, "m7", "c7", "failed", "bad", ["m7"], ["m7"], [], [], 0.7)])]),
-        ):
+        ), patch("src.config.settings.get_config", return_value=SimpleNamespace(pass_port=[])):
             self._run_module(history_path, "__main__")
 
         self.assertIn("今天下午: 8007: bad (m7)", result.getvalue())
