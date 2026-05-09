@@ -67,6 +67,30 @@ class TestHistoryAdapter(unittest.TestCase):
 
         self.assertEqual(results, [("2026-12-15 上午", [sample_result])])
 
+    def test_filter_log_files_includes_previous_month_last_day(self) -> None:
+        class FixedDatetime(real_datetime):
+            @classmethod
+            def now(cls, tz: Optional[tzinfo] = None):
+                return cls(2026, 4, 15, 10, 0, 0, tzinfo=tz)
+
+        def mock_from_reader(*_args: object, **_kwargs: object) -> Iterator[VLLMTestResult]:
+            sample_result = VLLMTestResult("127.0.0.1", 8011, "m11", "c11", "failed", "bad", ["m11"], ["m11"], [], [], 1.1)
+            return iter([sample_result])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            (output_dir / "vllm_test_results_20260330_080000.csv").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_20260331_080000.csv").write_text("", encoding="utf-8")
+            (output_dir / "vllm_test_results_20260401_080000.csv").write_text("", encoding="utf-8")
+
+            with patch.object(history_adapter, "get_config", return_value=SimpleNamespace(csv_output_path=str(output_dir))), patch.object(
+                history_adapter, "datetime", FixedDatetime
+            ), patch.object(history_adapter.VLLMTestResult, "from_reader", side_effect=mock_from_reader):
+                results = list(history_adapter.filter_log_files(None))
+
+        self.assertCountEqual([period for period, _ in results], ["2026-03-31 上午", "2026-04-01 上午"])
+        self.assertTrue(all(group and len(group) == 1 for _, group in results))
+
     def test_filter_log_files_handles_default_directory_and_import_fallback(self) -> None:
         class FixedDatetime(real_datetime):
             @classmethod
